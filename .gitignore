@@ -1,0 +1,55 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.env/
+.venv/
+env/
+venv/
+.claude/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+coverage.xml
+.cache
+pytest_cache/
+nosetests.xml
+test-results/
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+
+# Redis dump files (if you're persisting for local testing)
+dump.rdb
+*.aof
+
+# VS Code
+.vscode/
+
+# IDEs
+.idea/
+*.swp
+
+# Environment variables
+.env
+*.env
+
+# Mac / Linux / Windows junk
+.DS_Store
+Thumbs.db

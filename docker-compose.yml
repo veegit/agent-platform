@@ -1,0 +1,108 @@
+#version: '3.8'
+
+services:
+  # API Service
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - LOG_LEVEL=INFO
+    depends_on:
+      - redis
+    command: uvicorn services.api.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - agent_network
+    restart: unless-stopped
+
+  # Agent Lifecycle Service
+  agent_lifecycle:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - LOG_LEVEL=INFO
+    depends_on:
+      - redis
+    command: uvicorn services.agent_lifecycle.main:app --host 0.0.0.0 --port 8001 --reload
+    ports:
+      - "8001:8001"
+    networks:
+      - agent_network
+    restart: unless-stopped
+
+  # Skill Service
+  skill_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - LOG_LEVEL=INFO
+    depends_on:
+      - redis
+    command: uvicorn services.skill_service.main:app --host 0.0.0.0 --port 8002 --reload
+    ports:
+      - "8002:8002"
+    networks:
+      - agent_network
+    restart: unless-stopped
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - agent_network
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis Commander - Web UI for Redis
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - agent_network
+    restart: unless-stopped
+
+networks:
+  agent_network:
+    driver: bridge
+
+volumes:
+  redis_data:
