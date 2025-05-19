@@ -42,8 +42,10 @@ class AgentLifecycleClient:
             logger.info(f"Getting agent {agent_id}")
             
             async with httpx.AsyncClient() as client:
+                url = f"{self.base_url}/agents/{agent_id}"
+                print(f"Requesting URL: {url}")
                 response = await client.get(
-                    f"{self.base_url}/agents/{agent_id}",
+                    url,
                     timeout=10.0
                 )
                 

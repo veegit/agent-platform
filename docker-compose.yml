@@ -47,6 +47,28 @@ services:
       - agent_network
     restart: unless-stopped
 
+  agent_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - LOG_LEVEL=INFO
+    depends_on:
+      - redis
+    command: uvicorn services.agent_service.main:app --host 0.0.0.0 --port 8003 --reload
+    ports:
+      - "8003:8003"
+    networks:
+      - agent_network
+    restart: unless-stopped
+
   # Skill Service
   skill_service:
     build:

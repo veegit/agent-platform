@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Any
 
 from shared.utils.redis_manager import RedisManager
 from shared.utils.redis_agent_store import RedisAgentStore
+from shared.utils.json_utils import DateTimeEncoder
 from services.agent_lifecycle.models.agent import Agent, AgentStatus, AgentConfig
 
 logger = logging.getLogger(__name__)
@@ -85,7 +86,7 @@ class AgentRepository:
             agent.updated_at = datetime.now()
             
             # Store the full agent data
-            await self.redis_manager.redis_client.set_value(agent_key, agent.dict())
+            await self.redis_manager.redis_client.set_value(agent_key, json.dumps(agent.dict(), cls=DateTimeEncoder))
             
             logger.info(f"Created agent {agent.agent_id}")
             return agent.agent_id
@@ -110,9 +111,10 @@ class AgentRepository:
             # Try to get full agent data first
             agent_key = f"{self.AGENT_KEY_PREFIX}{agent_id}"
             agent_data = await self.redis_manager.redis_client.get_value(agent_key)
-            
             if agent_data:
-                # Return the full agent data
+                print(f"Raw value from Redis: {type(agent_data)} -> {agent_data}")
+                agent_data['created_at'] = datetime.fromisoformat(agent_data['created_at'])
+                agent_data['updated_at'] = datetime.fromisoformat(agent_data['updated_at'])
                 return Agent(**agent_data)
             
             # Fall back to agent store if full data not found
@@ -142,7 +144,7 @@ class AgentRepository:
             )
             
             # Save the full agent data for future use
-            await self.redis_manager.redis_client.set_value(agent_key, agent.dict())
+            await self.redis_manager.redis_client.set_value(agent_key, json.dumps(agent.dict(), cls=DateTimeEncoder))
             
             return agent
             
@@ -177,7 +179,7 @@ class AgentRepository:
             
             # Store the updated agent data
             agent_key = f"{self.AGENT_KEY_PREFIX}{agent_id}"
-            await self.redis_manager.redis_client.set_value(agent_key, agent.dict())
+            await self.redis_manager.redis_client.set_value(agent_key, json.dumps(agent.dict(), cls=DateTimeEncoder))
             
             # Update the status in the agent store
             success = await self.agent_store.update_agent_status(agent_id, status.value)
@@ -223,7 +225,7 @@ class AgentRepository:
             
             # Store the updated agent data
             agent_key = f"{self.AGENT_KEY_PREFIX}{agent_id}"
-            await self.redis_manager.redis_client.set_value(agent_key, agent.dict())
+            await self.redis_manager.redis_client.set_value(agent_key, json.dumps(agent.dict(), cls=DateTimeEncoder))
             
             # Update the configuration in the agent store
             redis_agent_data = {
@@ -316,7 +318,7 @@ class AgentRepository:
             
             # Store the updated agent data
             agent_key = f"{self.AGENT_KEY_PREFIX}{agent_id}"
-            await self.redis_manager.redis_client.set_value(agent_key, agent.dict())
+            await self.redis_manager.redis_client.set_value(agent_key, json.dumps(agent.dict(), cls=DateTimeEncoder))
             
             # Update the status in the agent store
             success = await self.agent_store.update_agent_status(agent_id, AgentStatus.DELETED.value)

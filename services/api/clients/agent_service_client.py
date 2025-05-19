@@ -59,8 +59,10 @@ class AgentServiceClient:
             logger.info(f"Sending message to agent {agent_id}: {message[:50]}{'...' if len(message) > 50 else ''}")
             
             async with httpx.AsyncClient() as client:
+                url = f"{self.base_url}/agents/{agent_id}/chat"
+                print(f"Requesting URL: {url}")
                 response = await client.post(
-                    f"{self.base_url}/agents/{agent_id}/chat",
+                    url,
                     json=request_data,
                     timeout=60.0  # Longer timeout for agent processing
                 )
