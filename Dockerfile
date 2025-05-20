@@ -14,8 +14,8 @@ COPY requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
-# Install specific LangGraph version that works with the code
-RUN pip install --no-cache-dir langgraph==0.0.15
+# Install LangGraph (specific version compatible with our code)
+RUN pip install --no-cache-dir "langgraph==0.0.15"
 
 # Copy application code
 COPY . .

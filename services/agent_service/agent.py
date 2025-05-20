@@ -111,8 +111,27 @@ class Agent:
         # Save state
         await self.memory_manager.save_agent_state(state)
         
-        # Execute the graph
-        final_state = await self.graph.invoke(state.dict())
+        # Execute the graph - use ainvoke instead of invoke for LangGraph 0.0.15
+        try:
+            # Try with ainvoke method first (newer LangGraph versions)
+            if hasattr(self.graph, 'ainvoke'):
+                final_state = await self.graph.ainvoke(state.dict())
+            else:
+                # Fall back to invoke for older versions
+                final_state = await self.graph.invoke(state.dict())
+        except Exception as e:
+            logger.error(f"Error executing agent graph: {e}")
+            # Add a fallback response if graph execution fails
+            state.messages.append(Message(
+                id=str(uuid.uuid4()),
+                role=MessageRole.AGENT,
+                content="I'm sorry, I'm having trouble processing your request right now. Please try again later.",
+                timestamp=datetime.now()
+            ))
+            return AgentOutput(
+                message=state.messages[-1],
+                state=state
+            )
         
         # Convert the final state back to an AgentState
         final_agent_state = AgentState(**final_state)

@@ -9,6 +9,10 @@ requests>=2.26.0
 fastapi>=0.104.0
 httpx>=0.25.0
 
+# LangGraph for agent workflow
+# We install the specific version in Dockerfile, do not specify here
+# langgraph==0.0.15
+
 # LangChain for skill integrations
 langchain>=0.0.335
 langchain-core>=0.1.3

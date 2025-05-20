@@ -3,12 +3,14 @@ Redis client module for handling all interactions with Redis.
 Provides functions for storing and retrieving various types of data.
 """
 
-import json
 import logging
 from typing import Any, Dict, List, Optional, Union
 import os
 import redis.asyncio as redis
 from redis.exceptions import RedisError
+
+import json
+from shared.utils.json_utils import dumps, loads
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +74,7 @@ class RedisClient:
         """
         try:
             if not isinstance(value, str):
-                value = json.dumps(value)
+                value = dumps(value)
             
             if expiry:
                 return await self.redis.setex(key, expiry, value)
@@ -98,8 +100,8 @@ class RedisClient:
                 return default
             
             try:
-                return json.loads(value)
-            except json.JSONDecodeError:
+                return loads(value)
+            except (json.JSONDecodeError, TypeError):
                 return value
         except RedisError as e:
             logger.error(f"Failed to get value for key {key}: {e}")
@@ -147,7 +149,7 @@ class RedisClient:
         """
         try:
             if not isinstance(value, str):
-                value = json.dumps(value)
+                value = dumps(value)
             
             return await self.redis.rpush(key, value) > 0
         except (RedisError, TypeError) as e:
@@ -169,8 +171,8 @@ class RedisClient:
             
             for value in values:
                 try:
-                    result.append(json.loads(value))
-                except json.JSONDecodeError:
+                    result.append(loads(value))
+                except (json.JSONDecodeError, TypeError):
                     result.append(value)
             
             return result
@@ -192,7 +194,7 @@ class RedisClient:
             serialized_map = {}
             for field, value in field_value_map.items():
                 if not isinstance(value, str):
-                    serialized_map[field] = json.dumps(value)
+                    serialized_map[field] = dumps(value)
                 else:
                     serialized_map[field] = value
             
@@ -216,8 +218,8 @@ class RedisClient:
             
             for field, value in raw_hash.items():
                 try:
-                    result[field] = json.loads(value)
-                except json.JSONDecodeError:
+                    result[field] = loads(value)
+                except (json.JSONDecodeError, TypeError):
                     result[field] = value
             
             return result
@@ -242,8 +244,8 @@ class RedisClient:
                 return default
             
             try:
-                return json.loads(value)
-            except json.JSONDecodeError:
+                return loads(value)
+            except (json.JSONDecodeError, TypeError):
                 return value
         except RedisError as e:
             logger.error(f"Failed to get field {field} from hash {key}: {e}")
@@ -263,7 +265,7 @@ class RedisClient:
             serialized_values = []
             for value in values:
                 if not isinstance(value, str):
-                    serialized_values.append(json.dumps(value))
+                    serialized_values.append(dumps(value))
                 else:
                     serialized_values.append(value)
             
@@ -287,8 +289,8 @@ class RedisClient:
             
             for value in values:
                 try:
-                    result.append(json.loads(value))
-                except json.JSONDecodeError:
+                    result.append(loads(value))
+                except (json.JSONDecodeError, TypeError):
                     result.append(value)
             
             return result

@@ -95,7 +95,12 @@ async def get_agent(agent_id: str) -> Agent:
         return agent_registry[agent_id]
     
     # In a real implementation, we would load the agent configuration from Redis or a database
-    # For now, return a 404
+    # For now, use the demo agent as a fallback for any ID
+    if "demo-agent" in agent_registry:
+        logger.warning(f"Agent {agent_id} not found, using demo-agent as fallback")
+        return agent_registry["demo-agent"]
+    
+    # If no agent found and no demo agent, return 404
     raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
 
 
@@ -201,7 +206,17 @@ async def send_message(
     
     except Exception as e:
         logger.error(f"Error processing message: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to process message: {str(e)}")
+        # Return a fallback response instead of raising an exception
+        return MessageResponse(
+            agent_id=agent_id,
+            conversation_id=request.conversation_id or str(uuid.uuid4()),
+            message=Message(
+                id=str(uuid.uuid4()),
+                role="agent",
+                content="I'm sorry, I encountered an error while processing your message. Please try again later.",
+                timestamp=datetime.now()
+            )
+        )
 
 
 @app.get("/agents/{agent_id}/conversations/{conversation_id}/history", response_model=List[Message])
