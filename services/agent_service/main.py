@@ -91,8 +91,16 @@ async def get_agent(agent_id: str) -> Agent:
     Raises:
         HTTPException: If the agent is not found.
     """
-    if agent_id in agent_registry:
-        return agent_registry[agent_id]
+    if agent_id not in agent_registry:
+        agent_data = await redis_manager.agent_store.get_agent(agent_id)
+        if agent_data:
+            config = AgentConfig(**agent_data["config"])
+            loaded_agent = Agent(config=config, memory_manager=memory_manager, skill_client=skill_client)
+            await loaded_agent.initialize()
+            agent_registry[agent_id] = loaded_agent
+            logger.info(f"Loaded agent {agent_id} from Redis into registry")
+            return loaded_agent
+
     
     # In a real implementation, we would load the agent configuration from Redis or a database
     # For now, use the demo agent as a fallback for any ID

@@ -81,22 +81,10 @@ class ConversationService:
                     "error": f"Agent {agent_id} is not available for conversations"
                 }
             
-            # Create a new conversation
-            conversation_id = str(uuid.uuid4())
             now = datetime.now().isoformat()
             
-            conversation_data = {
-                "id": conversation_id,
-                "agent_id": agent_id,
-                "user_id": user_id,
-                "status": ConversationStatus.ACTIVE.value,
-                "created_at": now,
-                "updated_at": now,
-                "metadata": metadata or {}
-            }
-            
             # Create conversation in Redis
-            await self.conversation_store.create_conversation(user_id, agent_id, metadata)
+            conversation_id = await self.conversation_store.create_conversation(user_id, agent_id, metadata)
             
             # If there's an initial message, send it
             if initial_message:

@@ -101,7 +101,7 @@ class RedisAgentStore:
         
         try:
             # Get the main agent data
-            agent_data = await self.redis.get_hash(agent_key)
+            agent_data = await self.redis.get_value(agent_key)
             if not agent_data:
                 return None
             
@@ -142,7 +142,7 @@ class RedisAgentStore:
         
         for agent_id in agent_ids:
             agent_key = f"{self.AGENT_KEY_PREFIX}{agent_id}"
-            agent_data = await self.redis.get_hash(agent_key)
+            agent_data = await self.redis.get_value(agent_key)
             if agent_data:
                 agents.append(agent_data)
         
