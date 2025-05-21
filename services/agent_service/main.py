@@ -10,10 +10,12 @@ from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, HTTPException, Depends, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from datetime import datetime # Ensure datetime is imported for Message model fallback
 
 from shared.utils.redis_manager import RedisManager
+from shared.utils.redis_agent_store import RedisAgentStore # Added import
 from services.agent_service.models.config import AgentConfig, ReasoningModel, AgentPersona, MemoryConfig
-from services.agent_service.models.state import Message, AgentState
+from services.agent_service.models.state import Message, AgentState # Ensure Message is imported
 from services.agent_service.memory import MemoryManager
 from services.agent_service.skill_client import SkillServiceClient
 from services.agent_service.agent import Agent
@@ -60,6 +62,9 @@ skill_client = SkillServiceClient(
 # Agent registry (in-memory for now, would move to Redis for production)
 agent_registry: Dict[str, Agent] = {}
 
+# Redis Agent Store
+redis_agent_store: Optional[RedisAgentStore] = None
+
 
 # Models for API
 class MessageRequest(BaseModel):
@@ -93,15 +98,104 @@ async def get_agent(agent_id: str) -> Agent:
     """
     if agent_id in agent_registry:
         return agent_registry[agent_id]
-    
-    # In a real implementation, we would load the agent configuration from Redis or a database
-    # For now, use the demo agent as a fallback for any ID
+
+    logger.info(f"Agent {agent_id} not in memory cache, attempting to load from Redis.")
+    if not redis_agent_store:
+        logger.error("RedisAgentStore not initialized. Cannot load agent from Redis.")
+    else:
+        try:
+            loaded_agent_data = await redis_agent_store.get_agent(agent_id)
+            logger.debug(f"Raw loaded_agent_data for {agent_id} from Redis: {loaded_agent_data}") # Log point 1
+
+            if loaded_agent_data:
+                logger.info(f"Agent {agent_id} found in Redis. Reconstructing agent instance.")
+                
+                config_data = loaded_agent_data.get('config')
+                logger.debug(f"Extracted config_data for {agent_id}: {config_data}") # Log point 2
+
+                if not config_data:
+                    logger.error(f"Config data missing for agent {agent_id} in Redis. Data: {loaded_agent_data}")
+                else:
+                    persona_data = config_data.get('persona')
+                    reasoning_model_str = config_data.get('reasoning_model', ReasoningModel.LLAMA3_70B.value) # Default if missing
+                    memory_data = config_data.get('memory')
+                    # Use skills from top level of loaded_agent_data as per previous logic, or from config if that was intended
+                    skills_list = loaded_agent_data.get('skills', config_data.get('skills', [])) 
+                    logger.debug(f"Skills list for {agent_id}: {skills_list}") # Log point 6
+                    
+                    default_skill_params = config_data.get('default_skill_params', {})
+                    additional_config_data = config_data.get('additional_config', {})
+
+                    if not persona_data:
+                        logger.error(f"Persona data missing for agent {agent_id}. Using default placeholder.")
+                        # Provide a default persona to allow agent creation
+                        persona_data = {
+                            "name": "Default Persona", 
+                            "description": "Default description", 
+                            "system_prompt": "You are a helpful assistant."
+                        }
+                    
+                    logger.debug(f"Attempting to create AgentPersona for {agent_id} with data: {persona_data}") # Log point 3 (before)
+                    try:
+                        agent_persona = AgentPersona(**persona_data)
+                        
+                        logger.debug(f"Attempting to create ReasoningModel for {agent_id} from string: '{reasoning_model_str}'") # Log point 4 (before)
+                        try:
+                            reasoning_model_enum = ReasoningModel(reasoning_model_str)
+                        except ValueError as e_reasoning:
+                            logger.warning(f"Invalid reasoning model string '{reasoning_model_str}' for agent {agent_id}. Defaulting to LLAMA3_70B. Error: {e_reasoning}") # Log point 4 (except)
+                            reasoning_model_enum = ReasoningModel.LLAMA3_70B
+                        
+                        agent_memory_config_instance = MemoryConfig() # Default instance
+                        if memory_data:
+                            logger.debug(f"Attempting to create MemoryConfig for {agent_id} with data: {memory_data}") # Log point 5 (before)
+                            try:
+                                agent_memory_config_instance = MemoryConfig(**memory_data)
+                            except Exception as e_memory: # Catching generic Exception as Pydantic errors can vary
+                                logger.error(f"Error creating MemoryConfig for agent {agent_id} with data {memory_data}: {e_memory}. Using default MemoryConfig.")
+                        else:
+                            logger.debug(f"No memory_data provided for {agent_id}. Using default MemoryConfig.")
+
+
+                        reconstructed_agent_config = AgentConfig(
+                            agent_id=agent_id, # Use the requested agent_id
+                            persona=agent_persona,
+                            reasoning_model=reasoning_model_enum,
+                            skills=skills_list,
+                            memory=agent_memory_config_instance,
+                            default_skill_params=default_skill_params,
+                            additional_config=additional_config_data
+                        )
+                        logger.info(f"Successfully reconstructed AgentConfig for {agent_id}: {reconstructed_agent_config.dict()}") # Log point 7
+
+                        new_agent = Agent(
+                            config=reconstructed_agent_config,
+                            memory_manager=memory_manager,
+                            skill_client=skill_client
+                        )
+                        await new_agent.initialize()
+                        logger.info(f"Caching agent {agent_id} in agent_registry.") # Log point 9
+                        agent_registry[agent_id] = new_agent
+                        logger.info(f"Agent {agent_id} loaded from Redis and initialized successfully.")
+                        return new_agent
+                    except Exception as e: # Main reconstruction exception
+                        # Log point 3 (except) - This covers AgentPersona creation if it fails within this broader try-except
+                        if 'persona_data' in locals(): # Check if persona_data was defined
+                             logger.error(f"Error during AgentPersona creation or subsequent model instantiation for {agent_id} with persona_data: {persona_data}. Full error: {e}")
+                        # Log point 8 (comprehensive log)
+                        logger.error(f"Error reconstructing agent {agent_id} from Redis data: {e}. Raw loaded_agent_data: {loaded_agent_data}")
+            else:
+                logger.info(f"Agent {agent_id} not found in Redis.")
+        except Exception as e:
+            logger.error(f"Failed to load agent {agent_id} from Redis (outer try-block): {e}")
+
+    # Fallback logic if agent not loaded from Redis
     if "demo-agent" in agent_registry:
-        logger.warning(f"Agent {agent_id} not found, using demo-agent as fallback")
+        logger.warning(f"Agent {agent_id} not loaded from Redis, using demo-agent as fallback.")
         return agent_registry["demo-agent"]
     
-    # If no agent found and no demo agent, return 404
-    raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+    logger.error(f"Agent {agent_id} not found in Redis, and demo-agent also not available.")
+    raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found and demo-agent unavailable")
 
 
 # Startup event
@@ -115,6 +209,11 @@ async def startup_event():
     
     # Initialize memory manager
     await memory_manager.initialize()
+
+    # Initialize RedisAgentStore
+    global redis_agent_store
+    redis_agent_store = RedisAgentStore(redis_client=redis_manager.redis_client)
+    logger.info("RedisAgentStore initialized.")
     
     # Create a demo agent
     demo_agent_id = "demo-agent"
