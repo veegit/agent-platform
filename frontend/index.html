@@ -1,0 +1,37 @@
+<!-- frontend/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Agentic Chat</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="container">
+    <!-- initial screen: ask for userId + agent -->
+    <div id="init-screen" class="screen">
+      <input id="userId" type="text" placeholder="Enter User ID" />
+      <select id="agentSelect">
+        <option value="">– Select Agent –</option>
+      </select>
+      <button id="startBtn">Start Conversation</button>
+      <div id="spinner" class="hidden">⏳ Loading…</div>
+    </div>
+
+    <!-- chat screen: hidden until after start -->
+    <div id="chat-screen" class="screen hidden">
+      <h2>Chat with <span id="agentName"></span></h2>
+      <div id="messages"></div>
+      <div id="input-area">
+        <input id="messageInput" type="text" placeholder="Type a message…" />
+        <button id="sendBtn">Send</button>
+        <!-- you can reuse the same spinner if you like -->
+        <div id="spinner" class="hidden">⏳</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/script.js"></script>
+</body>
+</html>

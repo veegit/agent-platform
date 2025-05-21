@@ -20,6 +20,9 @@ RUN pip install --no-cache-dir "langgraph==0.0.15"
 # Copy application code
 COPY . .
 
+# Copy our static UI into the image
+COPY frontend /app/frontend
+
 # Create non-root user for security
 RUN adduser --disabled-password --gecos "" appuser
 RUN chown -R appuser:appuser /app

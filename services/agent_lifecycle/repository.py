@@ -112,7 +112,6 @@ class AgentRepository:
             agent_key = f"{self.AGENT_KEY_PREFIX}{agent_id}"
             agent_data = await self.redis_manager.redis_client.get_value(agent_key)
             if agent_data:
-                print(f"Raw value from Redis: {type(agent_data)} -> {agent_data}")
                 agent_data['created_at'] = datetime.fromisoformat(agent_data['created_at'])
                 agent_data['updated_at'] = datetime.fromisoformat(agent_data['updated_at'])
                 return Agent(**agent_data)

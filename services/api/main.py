@@ -7,6 +7,7 @@ import os
 from typing import Dict, Any
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -37,6 +38,14 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+app.include_router(router, prefix="")
+
+app.mount(
+    "/",
+    StaticFiles(directory="frontend", html=True),
+    name="chat-ui",
 )
 
 # Initialize Redis manager
