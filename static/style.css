@@ -1,0 +1,137 @@
+body {
+    font-family: sans-serif;
+    margin: 0;
+    background-color: #f4f4f4;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.container {
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    width: 500px;
+    max-width: 90%;
+}
+
+#initialSetup, #conversationDisplay {
+    padding: 20px;
+}
+
+#initialSetup h2 {
+    margin-top: 0;
+    text-align: center;
+}
+
+#initialSetup div {
+    margin-bottom: 15px;
+}
+
+#initialSetup label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+#initialSetup input[type="text"],
+#initialSetup select {
+    width: calc(100% - 22px); /* Adjust for padding and border */
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+#conversationHeader {
+    background-color: #007bff;
+    color: white;
+    padding: 10px;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    text-align: center;
+}
+
+#conversationHeader p {
+    margin: 0;
+}
+
+#chatbox {
+    height: 300px;
+    overflow-y: auto;
+    border: 1px solid #eee;
+    padding: 10px;
+    margin-bottom: 10px;
+    background-color: #f9f9f9;
+}
+
+.message {
+    margin-bottom: 10px;
+    padding: 8px 12px;
+    border-radius: 18px;
+    max-width: 70%;
+    word-wrap: break-word;
+}
+
+.user-message {
+    background-color: #007bff;
+    color: white;
+    margin-left: auto;
+    text-align: right;
+}
+
+.agent-message {
+    background-color: #e9ecef;
+    color: #333;
+    margin-right: auto;
+    text-align: left;
+}
+
+.system-message {
+    font-style: italic;
+    text-align: center;
+    color: #666;
+    font-size: 0.9em;
+}
+
+#chatInput {
+    display: flex;
+    align-items: center;
+    padding-top: 10px;
+    border-top: 1px solid #eee;
+}
+
+#messageInput {
+    flex-grow: 1;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    resize: none;
+    height: 40px; /* Initial height, can grow if needed */
+}
+
+#sendButton {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: 10px;
+    transition: background-color 0.2s;
+}
+
+#sendButton:hover {
+    background-color: #0056b3;
+}
+
+#sendButton:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+#loadingIndicator {
+    margin-left: 10px;
+    font-style: italic;
+    color: #555;
+}

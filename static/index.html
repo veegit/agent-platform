@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat with Agent</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div id="initialSetup">
+            <h2>Start Conversation</h2>
+            <div>
+                <label for="userId">User ID:</label>
+                <input type="text" id="userId" placeholder="Enter your user ID">
+            </div>
+            <div>
+                <label for="agentId">Select Agent:</label>
+                <select id="agentId">
+                    <!-- Options will be populated by JavaScript -->
+                    <option value="">Loading Agents...</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="conversationDisplay" style="display: none;">
+            <div id="conversationHeader">
+                <p>User: <span id="displayUserId"></span> | Agent: <span id="displayAgentName"></span></p>
+            </div>
+            <div id="chatbox">
+                <!-- Messages will appear here -->
+            </div>
+            <div id="chatInput">
+                <textarea id="messageInput" placeholder="Type your message..."></textarea>
+                <button id="sendButton">Send</button>
+                <div id="loadingIndicator" style="display: none;">Thinking...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
