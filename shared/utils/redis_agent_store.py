@@ -65,7 +65,7 @@ class RedisAgentStore:
         
         try:
             # Store the main agent data
-            await self.redis.set_hash(agent_key, simplified_agent)
+            await self.redis.set_value(agent_key, simplified_agent)
             
             # Store the skills as a set
             skills_key = f"{self.AGENT_SKILLS_KEY_PREFIX}{agent_id}"
@@ -162,7 +162,7 @@ class RedisAgentStore:
         
         try:
             # Update the status in the main hash
-            await self.redis.set_hash(agent_key, {"status": status})
+            await self.redis.set_value(agent_key, {"status": status})
             
             # Store the status history for auditing/debugging
             status_key = f"{self.AGENT_STATUS_KEY_PREFIX}{agent_id}"
