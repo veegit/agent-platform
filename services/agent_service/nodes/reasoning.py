@@ -65,11 +65,24 @@ def _build_reasoning_prompt(
     
     # Build memory context
     memory_context = ""
+    
+    # Extract recent entities for better reference resolution
+    recent_entities = []
+    for fact in state.memory.key_facts[-10:]:
+        if any(entity_marker in fact.lower() for entity_marker in ["is", "was", "named", "called", "person", "entity"]):
+            recent_entities.append(fact)
+    
+    # Add conversation summary
     if state.memory.conversation_summary:
         memory_context += f"\n### Conversation Summary\n{state.memory.conversation_summary}\n"
     
+    # Add key entities section first for better reference resolution
+    if recent_entities:
+        memory_context += "\n### Important Entities and People\n" + "\n".join([f"- {entity}" for entity in recent_entities]) + "\n"
+    
+    # Add all key facts
     if state.memory.key_facts:
-        memory_context += "\n### Key Facts\n" + "\n".join([f"- {fact}" for fact in state.memory.key_facts]) + "\n"
+        memory_context += "\n### All Key Facts\n" + "\n".join([f"- {fact}" for fact in state.memory.key_facts]) + "\n"
     
     # Build system prompt
     system_prompt = f"""# {config.persona.name} - Agent System Prompt
@@ -88,12 +101,15 @@ You have access to the following skills to help users:{skills_description}
 ## Memory and Context{memory_context}
 
 ## Instructions for Reasoning
-1. Think through the user's message and determine the best course of action
-2. You can either:
+1. Always check for references to entities or concepts mentioned in previous messages (e.g., pronouns like "he", "she", "it", "they", "this", "that")
+2. Resolve any references using the context from previous messages and key facts before deciding on a response
+3. Think through the user's message and determine the best course of action
+4. You can either:
    - Use one of your skills to gather information or take action
    - Respond directly to the user if you have enough information
-3. If you choose to use a skill, specify the skill_id and parameters
-4. Explain your reasoning process clearly
+5. If you choose to use a skill, specify the skill_id and parameters
+6. Maintain continuity in the conversation by acknowledging previously discussed entities
+7. If a user refers to a person, place, or thing mentioned earlier, ALWAYS connect it to its full reference from previous context
 
 {config.persona.system_prompt}
 """

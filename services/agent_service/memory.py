@@ -142,9 +142,13 @@ class MemoryManager:
                 if not state.memory.conversation_summary or len(state.messages) % config.memory.summarize_after == 0:
                     await self._summarize_conversation(state, config.memory)
             
-            # Extract key facts if enabled
+            # Extract key facts if enabled - do this more frequently to maintain entity references
             if config.memory.key_fact_extraction_enabled:
-                await self._extract_key_facts(state)
+                # Always extract key facts for short conversations (essential for maintaining context)
+                # For longer conversations, do it periodically
+                if len(state.messages) <= 10 or len(state.messages) % 3 == 0:
+                    logger.info(f"Extracting key facts for conversation {state.conversation_id}")
+                    await self._extract_key_facts(state)
             
             # Update working memory with recent context
             state.memory.working = {
@@ -247,15 +251,24 @@ class MemoryManager:
             messages_text = "\n\n".join(formatted_messages)
             
             # Create the prompt
-            system_prompt = "You are an AI assistant that extracts key facts from conversations. Focus on identifying important information that should be remembered for future reference."
-            user_prompt = f"""Please extract 1-3 key facts from the following conversation segment that would be important to remember for future interactions. 
-            Focus on specific information like names, preferences, goals, or important context.
-            Format each fact as a simple, clear statement.
+            system_prompt = """You are an AI assistant that extracts key facts from conversations. 
+            Your primary goal is to identify entities (people, places, things, concepts) and their relationships that should be remembered for future reference.
+            Pay special attention to proper nouns, titles, and any information that might be referenced later with pronouns.
+            When possible, establish clear relationships between entities (e.g., 'John McCarthy is the inventor of artificial intelligence' rather than just 'John McCarthy invented something')."""
+            
+            user_prompt = f"""Please extract 3-5 key facts from the following conversation segment that would be important to remember for future interactions.
+            Focus on the following with HIGH PRIORITY:
+            1. Names of people, places, or organizations and their roles/relationships
+            2. Specific attributes or characteristics that might be referenced later
+            3. Connections between entities (X is related to Y, X created Y, etc.)
+            
+            Format each fact as a complete, clear statement that could stand alone.
+            For people, ALWAYS include their full name and relevant context (e.g., "John McCarthy is the inventor of artificial intelligence" not just "John invented AI").
             
             CONVERSATION:
             {messages_text}
             
-            KEY FACTS (1-3 facts only):"""
+            KEY FACTS (3-5 facts only):"""
             
             # Call LLM to extract facts
             llm_response = await call_llm(
@@ -275,7 +288,7 @@ class MemoryManager:
             # Parse facts (assuming one fact per line)
             new_facts = [line.strip() for line in facts_text.split("\n") if line.strip()]
             
-            # Add new facts to the list, avoiding duplicates
+            # Add new facts to the list, ensuring entity-rich facts are prioritized
             for fact in new_facts:
                 # Remove any leading numbers or bullets
                 clean_fact = fact
@@ -284,9 +297,51 @@ class MemoryManager:
                         clean_fact = clean_fact[len(prefix):]
                         break
                 
+                # Skip empty facts
+                if not clean_fact:
+                    continue
+                    
+                # Check if this is an entity-rich fact (contains names, relationships, etc.)
+                is_entity_fact = any(entity_marker in clean_fact.lower() for entity_marker in 
+                                   [" is ", " was ", " named ", " called ", "person", "entity", 
+                                    "inventor", "creator", "founded", "discovered", "developed"])
+                
                 # Check if this fact or a very similar one is already in the list
-                if clean_fact and clean_fact not in state.memory.key_facts:
-                    state.memory.key_facts.append(clean_fact)
+                is_duplicate = False
+                for existing_fact in state.memory.key_facts:
+                    # Simple string match
+                    if clean_fact == existing_fact:
+                        is_duplicate = True
+                        break
+                    # Similarity check for entities (e.g., "John McCarthy invented AI" vs "AI was invented by John McCarthy")
+                    if is_entity_fact and any(name in existing_fact for name in clean_fact.split() if len(name) > 4):
+                        # Check if the same entities are mentioned
+                        similar_words = sum(1 for word in clean_fact.split() if word.lower() in existing_fact.lower() and len(word) > 4)
+                        if similar_words >= 3:  # If at least 3 significant words match
+                            is_duplicate = True
+                            break
+                
+                # Add the fact if it's not a duplicate
+                if not is_duplicate:
+                    # If it's an entity-rich fact, add it to the front of the list to prioritize it
+                    if is_entity_fact:
+                        state.memory.key_facts.insert(0, clean_fact)
+                    else:
+                        state.memory.key_facts.append(clean_fact)
+                        
+            # Limit the number of key facts to prevent memory bloat
+            if len(state.memory.key_facts) > 30:
+                # Prioritize keeping entity-rich facts
+                entity_facts = [f for f in state.memory.key_facts if any(marker in f.lower() for marker in 
+                               [" is ", " was ", " named ", " called ", "person", "entity", 
+                                "inventor", "creator", "founded", "discovered", "developed"])]
+                other_facts = [f for f in state.memory.key_facts if f not in entity_facts]
+                
+                # Keep all entity facts if possible, then add other facts until we hit the limit
+                if len(entity_facts) <= 25:
+                    state.memory.key_facts = entity_facts + other_facts[:30-len(entity_facts)]
+                else:
+                    state.memory.key_facts = entity_facts[:30]
             
             logger.info(f"Extracted key facts for conversation {state.conversation_id}")
         
