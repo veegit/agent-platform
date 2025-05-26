@@ -37,6 +37,17 @@ class ResponseFormat(BaseModel):
     description: str = Field(..., description="Description of the response format")
 
 
+class InvocationPattern(BaseModel):
+    """Model for a skill invocation pattern."""
+    
+    pattern: str = Field(..., description="Regex pattern or keyword to match in user input")
+    pattern_type: str = Field(default="keyword", description="Type of pattern: 'keyword', 'regex', 'startswith', or 'contains'")
+    description: str = Field(..., description="Description of what this pattern matches")
+    priority: int = Field(default=1, description="Priority of this pattern (higher values mean higher priority)")
+    sample_queries: List[str] = Field(default_factory=list, description="Sample queries that match this pattern")
+    parameter_extraction: Optional[Dict[str, Dict[str, Any]]] = Field(default=None, description="Instructions for extracting parameters from the match")
+
+
 class Skill(BaseModel):
     """Model for a skill."""
     
@@ -48,6 +59,7 @@ class Skill(BaseModel):
     version: str = Field(default="1.0.0", description="Version of the skill")
     author: Optional[str] = Field(default=None, description="Author of the skill")
     tags: List[str] = Field(default_factory=list, description="Tags for the skill")
+    invocation_patterns: List[InvocationPattern] = Field(default_factory=list, description="Patterns that determine when this skill should be invoked")
     
     class Config:
         """Configuration for the Skill model."""

@@ -12,7 +12,8 @@ from shared.models.skill import (
     Skill,
     SkillParameter,
     ParameterType,
-    ResponseFormat
+    ResponseFormat,
+    InvocationPattern
 )
 
 logger = logging.getLogger(__name__)
@@ -74,7 +75,72 @@ SKILL_DEFINITION = Skill(
         },
         description="Summary of the provided text"
     ),
-    tags=["summarization", "groq", "text-processing", "llm"]
+    tags=["summarization", "groq", "text-processing", "llm"],
+    invocation_patterns=[
+        InvocationPattern(
+            pattern="summarize",
+            pattern_type="startswith",
+            description="Matches explicit requests to summarize content",
+            priority=5,
+            sample_queries=["summarize this article", "summarize the following text"],
+            parameter_extraction={
+                "text": {"type": "keyword_after", "keyword": "summarize"}
+            }
+        ),
+        InvocationPattern(
+            pattern="summary",
+            pattern_type="contains",
+            description="Matches requests that mention creating a summary",
+            priority=4,
+            sample_queries=["give me a summary of this", "provide a summary of the following"],
+            parameter_extraction={
+                "text": {"type": "content"}
+            }
+        ),
+        InvocationPattern(
+            pattern="condense",
+            pattern_type="contains",
+            description="Matches requests to condense information",
+            priority=4,
+            sample_queries=["condense this information", "condense the following text"],
+            parameter_extraction={
+                "text": {"type": "keyword_after", "keyword": "condense"}
+            }
+        ),
+        InvocationPattern(
+            pattern="key points",
+            pattern_type="contains",
+            description="Matches requests for key points from text",
+            priority=4,
+            sample_queries=["extract key points from this", "what are the key points in this text"],
+            parameter_extraction={
+                "text": {"type": "content"},
+                "format": {"type": "constant", "value": "key_points"}
+            }
+        ),
+        InvocationPattern(
+            pattern="bullet points",
+            pattern_type="contains",
+            description="Matches requests for bullet point summaries",
+            priority=4,
+            sample_queries=["give me bullet points from this", "summarize in bullet points"],
+            parameter_extraction={
+                "text": {"type": "content"},
+                "format": {"type": "constant", "value": "bullet_points"}
+            }
+        ),
+        InvocationPattern(
+            pattern="tldr",
+            pattern_type="contains",
+            description="Matches 'too long; didn't read' requests",
+            priority=5,
+            sample_queries=["tldr on this article", "give me a tldr"],
+            parameter_extraction={
+                "text": {"type": "content"},
+                "max_tokens": {"type": "constant", "value": 150}
+            }
+        )
+    ]
 )
 
 

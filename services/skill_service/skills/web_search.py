@@ -12,7 +12,8 @@ from shared.models.skill import (
     Skill,
     SkillParameter,
     ParameterType,
-    ResponseFormat
+    ResponseFormat,
+    InvocationPattern
 )
 
 logger = logging.getLogger(__name__)
@@ -87,7 +88,133 @@ SKILL_DEFINITION = Skill(
         },
         description="List of search results with titles, links, and snippets"
     ),
-    tags=["search", "web", "external-api", "serpapi"]
+    tags=["search", "web", "external-api", "serpapi"],
+    invocation_patterns=[
+        # News and recent information pattern
+        InvocationPattern(
+            pattern="recent",
+            pattern_type="keyword",
+            description="Matches queries about recent news or current events",
+            priority=5,  # Highest priority for news queries
+            sample_queries=["any recent news about AI", "latest updates on climate change"],
+            parameter_extraction={
+                "query": {"type": "content"},
+                "search_type": {"type": "constant", "value": "news"},
+                "num_results": {"type": "constant", "value": 5}
+            }
+        ),
+        InvocationPattern(
+            pattern="latest",
+            pattern_type="keyword",
+            description="Matches queries about latest news or updates",
+            priority=5,
+            sample_queries=["latest developments in quantum computing", "what are the latest AI breakthroughs"],
+            parameter_extraction={
+                "query": {"type": "content"},
+                "search_type": {"type": "constant", "value": "news"},
+                "num_results": {"type": "constant", "value": 5}
+            }
+        ),
+        InvocationPattern(
+            pattern="news",
+            pattern_type="keyword",
+            description="Matches queries explicitly asking for news",
+            priority=5,
+            sample_queries=["news about OpenAI", "technology news this week"],
+            parameter_extraction={
+                "query": {"type": "content"},
+                "search_type": {"type": "constant", "value": "news"},
+                "num_results": {"type": "constant", "value": 5}
+            }
+        ),
+        # Factual question patterns
+        InvocationPattern(
+            pattern="what",
+            pattern_type="startswith",
+            description="Matches factual questions starting with 'what'",
+            priority=2,
+            sample_queries=["what is quantum computing", "what are the effects of climate change"],
+            parameter_extraction={
+                "query": {"type": "content"},
+                "search_type": {"type": "constant", "value": "web"},
+                "num_results": {"type": "constant", "value": 5}
+            }
+        ),
+        InvocationPattern(
+            pattern="who",
+            pattern_type="startswith",
+            description="Matches factual questions starting with 'who'",
+            priority=2,
+            sample_queries=["who is the CEO of OpenAI", "who won the 2024 election"],
+            parameter_extraction={
+                "query": {"type": "content"},
+                "search_type": {"type": "constant", "value": "web"},
+                "num_results": {"type": "constant", "value": 5}
+            }
+        ),
+        InvocationPattern(
+            pattern="when",
+            pattern_type="startswith",
+            description="Matches factual questions starting with 'when'",
+            priority=2,
+            sample_queries=["when was Bitcoin created", "when is the next solar eclipse"],
+            parameter_extraction={
+                "query": {"type": "content"},
+                "search_type": {"type": "constant", "value": "web"},
+                "num_results": {"type": "constant", "value": 5}
+            }
+        ),
+        InvocationPattern(
+            pattern="where",
+            pattern_type="startswith",
+            description="Matches factual questions starting with 'where'",
+            priority=2,
+            sample_queries=["where is the Great Barrier Reef", "where can I find affordable housing"],
+            parameter_extraction={
+                "query": {"type": "content"},
+                "search_type": {"type": "constant", "value": "web"},
+                "num_results": {"type": "constant", "value": 5}
+            }
+        ),
+        # Explicit search requests
+        InvocationPattern(
+            pattern="search for",
+            pattern_type="contains",
+            description="Matches explicit search requests",
+            priority=4,
+            sample_queries=["search for best restaurants in San Francisco", "please search for electric car reviews"],
+            parameter_extraction={
+                "query": {"type": "keyword_after", "keyword": "search for"},
+                "search_type": {"type": "constant", "value": "web"},
+                "num_results": {"type": "constant", "value": 5}
+            }
+        ),
+        InvocationPattern(
+            pattern="find information",
+            pattern_type="contains",
+            description="Matches requests to find information",
+            priority=4,
+            sample_queries=["find information about solar panels", "please find information on machine learning"],
+            parameter_extraction={
+                "query": {"type": "keyword_after", "keyword": "find information"},
+                "search_type": {"type": "constant", "value": "web"},
+                "num_results": {"type": "constant", "value": 5}
+            }
+        ),
+        # Current events fallback pattern (lower priority)
+        InvocationPattern(
+            pattern="current",
+            pattern_type="keyword",
+            description="Matches queries about current events",
+            priority=3,
+            sample_queries=["current situation in Ukraine", "what is the current state of AI regulation"],
+            parameter_extraction={
+                "query": {"type": "content"},
+                "search_type": {"type": "constant", "value": "news"},
+                "num_results": {"type": "constant", "value": 5}
+            }
+        )
+    ]
 )
 
 

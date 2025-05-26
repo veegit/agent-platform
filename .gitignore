@@ -45,6 +45,7 @@ dump.rdb
 # IDEs
 .idea/
 *.swp
+*.code-workspace
 
 # Environment variables
 .env

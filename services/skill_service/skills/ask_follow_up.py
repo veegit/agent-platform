@@ -12,7 +12,8 @@ from shared.models.skill import (
     Skill,
     SkillParameter,
     ParameterType,
-    ResponseFormat
+    ResponseFormat,
+    InvocationPattern
 )
 
 logger = logging.getLogger(__name__)
@@ -90,7 +91,72 @@ SKILL_DEFINITION = Skill(
         },
         description="List of follow-up questions with reasoning"
     ),
-    tags=["questions", "groq", "conversation", "llm"]
+    tags=["questions", "groq", "conversation", "llm"],
+    invocation_patterns=[
+        InvocationPattern(
+            pattern="follow-up",
+            pattern_type="contains",
+            description="Matches explicit requests for follow-up questions",
+            priority=5,
+            sample_queries=["generate follow-up questions about this", "what follow-up questions can I ask"],
+            parameter_extraction={
+                "context": {"type": "content"}
+            }
+        ),
+        InvocationPattern(
+            pattern="follow up",
+            pattern_type="contains",
+            description="Matches explicit requests for follow up questions (without hyphen)",
+            priority=5,
+            sample_queries=["generate follow up questions", "what follow up questions should I ask"],
+            parameter_extraction={
+                "context": {"type": "content"}
+            }
+        ),
+        InvocationPattern(
+            pattern="more questions",
+            pattern_type="contains",
+            description="Matches requests for additional questions",
+            priority=4,
+            sample_queries=["suggest more questions about this", "what more questions can I ask"],
+            parameter_extraction={
+                "context": {"type": "content"}
+            }
+        ),
+        InvocationPattern(
+            pattern="deeper",
+            pattern_type="contains",
+            description="Matches requests to go deeper into a topic",
+            priority=3,
+            sample_queries=["how can I go deeper into this topic", "help me dig deeper with questions"],
+            parameter_extraction={
+                "context": {"type": "content"},
+                "question_type": {"type": "constant", "value": "probing"}
+            }
+        ),
+        InvocationPattern(
+            pattern="clarify",
+            pattern_type="contains",
+            description="Matches requests for clarifying questions",
+            priority=4,
+            sample_queries=["help me clarify this topic", "what clarifying questions should I ask"],
+            parameter_extraction={
+                "context": {"type": "content"},
+                "question_type": {"type": "constant", "value": "clarifying"}
+            }
+        ),
+        InvocationPattern(
+            pattern="challenge",
+            pattern_type="contains",
+            description="Matches requests for challenging questions",
+            priority=4,
+            sample_queries=["generate challenging questions", "what critical questions can I ask"],
+            parameter_extraction={
+                "context": {"type": "content"},
+                "question_type": {"type": "constant", "value": "challenging"}
+            }
+        )
+    ]
 )
 
 
