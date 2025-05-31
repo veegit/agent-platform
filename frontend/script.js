@@ -16,7 +16,7 @@ let currentAgentId    = null;
 let currentAgentName  = null;
 
 // 1) Load agents (response: { agents: [ { agent_id, config: { persona: { name, … }}, … }, … ] })
-fetch('http://localhost:8001/agents')
+fetch(CONFIG.LIFECYCLE_URL + '/agents')
   .then(res => res.json())
   .then(data => {
     data.agents.forEach(agent => {
@@ -41,14 +41,14 @@ startBtn.addEventListener('click', () => {
   spinner.classList.remove('hidden');
   sendBtn.disabled = true;
 
-  fetch('/conversations', {
+  fetch(CONFIG.API_URL + '/conversations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       user_id: currentUserId,
       agent_id: currentAgentId,
       initial_message: 'Hello'
-    })
+    }),
   })
     .then(res => res.json())
     .then(data => {
@@ -78,7 +78,7 @@ sendBtn.addEventListener('click', () => {
   spinner.classList.remove('hidden');
   sendBtn.disabled = true;
 
-  fetch(`/conversations/${conversationId}/messages`, {
+  fetch(CONFIG.API_URL + `/conversations/${conversationId}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

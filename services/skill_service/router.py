@@ -199,3 +199,7 @@ async def delete_skill(
     except Exception as e:
         logger.error(f"Error deleting skill {skill_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to delete skill: {str(e)}")
+
+@router.get("/health")
+async def health():
+    return {"status": "ok"}

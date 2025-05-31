@@ -1,0 +1,56 @@
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements file
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install LangGraph
+RUN pip install --no-cache-dir "langgraph==0.0.15"
+
+# Copy project files
+COPY . .
+
+# List directory contents for debugging
+RUN ls -la /app && \
+    ls -la /app/services && \
+    ls -la /app/services/skill_service
+
+# Create non-root user
+RUN adduser --disabled-password --gecos "" appuser
+RUN chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
+
+# CRITICAL: Set Python path to include the app directory
+ENV PYTHONPATH=/app
+
+# Get service to run from build arg (default to API service)
+ARG SERVICE=api_service
+ENV SERVICE_ENV=${SERVICE}
+
+# Default command with dynamic service selection - FIXED PATH NAMES
+CMD if [ "$SERVICE_ENV" = "api_service" ]; then \
+        python -m services.api.main; \
+    elif [ "$SERVICE_ENV" = "agent_service" ]; then \
+        python -m services.agent_service.main; \
+    elif [ "$SERVICE_ENV" = "agent_lifecycle" ]; then \
+        python -m services.agent_lifecycle.main; \
+    elif [ "$SERVICE_ENV" = "skill_service" ]; then \
+        python -m services.skill_service.main; \
+    else \
+        python -m services.api.main; \
+    fi
+

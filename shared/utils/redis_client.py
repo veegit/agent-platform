@@ -37,14 +37,17 @@ class RedisClient:
     def _connect(self) -> None:
         """Connect to Redis."""
         try:
+            ssl_enabled = os.getenv("REDIS_SSL", "false").lower() == "true"
             self.redis = redis.Redis(
                 host=self.host,
                 port=self.port,
                 db=self.db,
                 password=self.password,
-                decode_responses=True
+                decode_responses=True,
+                ssl=ssl_enabled,  # Add SSL support for Azure Redis
+                ssl_cert_reqs=None if ssl_enabled else None  # Skip certificate validation if SSL is enabled
             )
-            logger.info(f"Connected to Redis at {self.host}:{self.port}/{self.db}")
+            logger.info(f"Connected to Redis at {self.host}:{self.port}/{self.db} (SSL: {ssl_enabled})")
         except RedisError as e:
             logger.error(f"Failed to connect to Redis: {e}")
             raise
