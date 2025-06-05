@@ -300,6 +300,29 @@ class RedisClient:
         except RedisError as e:
             logger.error(f"Failed to get members of set {key}: {e}")
             return []
+
+    async def remove_from_set(self, key: str, *values: Any) -> int:
+        """Remove values from a set.
+
+        Args:
+            key: The set key.
+            *values: Values to remove (will be JSON-serialized if not strings).
+
+        Returns:
+            int: Number of values removed.
+        """
+        try:
+            serialized_values = []
+            for value in values:
+                if not isinstance(value, str):
+                    serialized_values.append(dumps(value))
+                else:
+                    serialized_values.append(value)
+
+            return await self.redis.srem(key, *serialized_values)
+        except (RedisError, TypeError) as e:
+            logger.error(f"Failed to remove values from set {key}: {e}")
+            return 0
     
     async def close(self) -> None:
         """Close the Redis connection."""
