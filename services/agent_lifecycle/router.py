@@ -279,3 +279,7 @@ async def delete_agent(
         status=AgentStatus.DELETED,
         message=f"Agent {agent_id} deleted successfully"
     )
+
+@router.get("/health")
+async def health():
+    return {"status": "ok"}

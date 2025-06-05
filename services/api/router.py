@@ -454,3 +454,7 @@ async def get_agent_status(
         active_conversations=response.get("active_conversations", 0),
         last_active=last_active
     )
+
+@router.get("/health")
+async def health():
+    return {"status": "ok"}

@@ -254,3 +254,85 @@ Redis is used for:
 ### Service Communication
 
 Services communicate with each other via HTTP APIs, allowing for a distributed architecture. Each service can be deployed and scaled independently.
+
+## Deployment
+### Continuous Deployment
+
+A GitHub Actions workflow is set up to automatically deploy to Azure whenever code is pushed to the main branch. The workflow is defined in `.github/workflows/azure-deploy.yml`.
+
+To set up continuous deployment:
+
+1. Add the following secrets to your GitHub repository:
+   - `AZURE_CREDENTIALS`: Azure service principal credentials (JSON format)
+   - `ACR_USERNAME`: Azure Container Registry username
+   - `ACR_PASSWORD`: Azure Container Registry password
+
+2. Push to the main branch to trigger the automatic deployment.
+
+You can also manually trigger the workflow from the "Actions" tab in your GitHub repository.
+
+The workflow will:
+1. Build Docker images for all four services
+2. Push the images to Azure Container Registry
+3. Update all Container Apps with the new images
+4. Configure environment variables to ensure proper inter-service communication
+
+### Manual Azure Deployment
+
+The platform can be deployed to Azure Container Apps for a scalable, managed environment.
+
+#### Prerequisites
+- Azure CLI installed and logged in
+- An Azure subscription
+- Access to Azure Container Registry (ACR)
+- Azure Key Vault with the following secrets:
+  - `REDIS-PASSWORD`: Password for Azure Cache for Redis
+  - `SERP-API-KEY`: Your SerpAPI key
+  - `GROQ-API-KEY`: Your Groq API key
+
+#### Initial Deployment
+
+For first-time deployment, use the `azure-deploy.sh` script with the `--initial` flag:
+
+```bash
+# Make the script executable if needed
+chmod +x azure-deploy.sh
+
+# Run the initial deployment
+./azure-deploy.sh --initial
+```
+
+This will:
+1. Build Docker images for all four services
+2. Push the images to Azure Container Registry
+3. Create a managed identity for accessing Key Vault secrets
+4. Deploy all services to Azure Container Apps
+5. Configure inter-service communication
+
+#### Redeploying After Changes
+
+For subsequent deployments after code changes:
+
+```bash
+./azure-deploy.sh
+```
+
+This will rebuild and update all services without recreating resources like managed identities.
+
+#### Customizing the Deployment
+
+You can customize the deployment by using the following options:
+
+```bash
+./azure-deploy.sh [--resource-group RESOURCE_GROUP] [--acr ACR_NAME] \
+                   [--keyvault KEYVAULT_NAME] [--environment ENVIRONMENT_NAME] \
+                   [--identity IDENTITY_NAME] [--initial]
+```
+
+All parameters are optional and will use defaults if not specified:
+- `--resource-group`: Azure resource group (default: "agent-platform-rg")
+- `--acr`: Azure Container Registry name (default: "agentplatformacr")
+- `--keyvault`: Key Vault name (default: "agent-platform-kv")
+- `--environment`: Container Apps environment (default: "agent-platform-env")
+- `--identity`: Managed identity name (default: "agent-platform-identity")
+- `--initial`: Flag for initial deployment (creates resources)

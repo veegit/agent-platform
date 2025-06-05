@@ -50,6 +50,7 @@ dump.rdb
 # Environment variables
 .env
 *.env
+.env.*
 
 # Mac / Linux / Windows junk
 .DS_Store
