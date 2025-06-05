@@ -1,0 +1,178 @@
+name: Deploy to Azure
+
+on:
+  push:
+    branches:
+      - azure-deploy
+  # Optional: Allow manual triggering through the GitHub UI
+  workflow_dispatch:
+
+env:
+  AZURE_RESOURCE_GROUP: agent-platform-rg
+  AZURE_ACR_NAME: agentplatformacr
+  AZURE_KEYVAULT_NAME: agent-platform-kv
+  AZURE_ENV_NAME: agent-platform-env
+  AZURE_IDENTITY_NAME: agent-platform-identity
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Log in to Azure Container Registry
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ env.AZURE_ACR_NAME }}.azurecr.io
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and push API service image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: ${{ env.AZURE_ACR_NAME }}.azurecr.io/agent-platform-api:latest
+
+      - name: Build and push Agent service image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: ${{ env.AZURE_ACR_NAME }}.azurecr.io/agent-platform-agent:latest
+          build-args: |
+            SERVICE=agent_service
+
+      - name: Build and push Lifecycle service image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: ${{ env.AZURE_ACR_NAME }}.azurecr.io/agent-platform-lifecycle:latest
+          build-args: |
+            SERVICE=agent_lifecycle
+
+      - name: Build and push Skill service image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: ${{ env.AZURE_ACR_NAME }}.azurecr.io/agent-platform-skill:latest
+          build-args: |
+            SERVICE=skill_service
+
+      - name: Get Identity ID
+        id: get-identity-id
+        run: |
+          IDENTITY_ID=$(az identity show --name ${{ env.AZURE_IDENTITY_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query id -o tsv)
+          echo "IDENTITY_ID=$IDENTITY_ID" >> $GITHUB_ENV
+
+      # Update the API service
+      - name: Update API service
+        run: |
+          az containerapp update \
+            --name agent-platform-api \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --image ${{ env.AZURE_ACR_NAME }}.azurecr.io/agent-platform-api:latest
+
+      # Update the Agent service
+      - name: Update Agent service
+        run: |
+          az containerapp update \
+            --name agent-platform-agent \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --image ${{ env.AZURE_ACR_NAME }}.azurecr.io/agent-platform-agent:latest
+
+      # Update the Lifecycle service
+      - name: Update Lifecycle service
+        run: |
+          az containerapp update \
+            --name agent-platform-lifecycle \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --image ${{ env.AZURE_ACR_NAME }}.azurecr.io/agent-platform-lifecycle:latest
+
+      # Update the Skill service
+      - name: Update Skill service
+        run: |
+          az containerapp update \
+            --name agent-platform-skill \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --image ${{ env.AZURE_ACR_NAME }}.azurecr.io/agent-platform-skill:latest
+
+      # Get the service URLs
+      - name: Get service URLs
+        id: get-urls
+        run: |
+          API_URL=$(az containerapp show --name agent-platform-api --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query "properties.configuration.ingress.fqdn" -o tsv)
+          AGENT_URL=$(az containerapp show --name agent-platform-agent --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query "properties.configuration.ingress.fqdn" -o tsv)
+          LIFECYCLE_URL=$(az containerapp show --name agent-platform-lifecycle --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query "properties.configuration.ingress.fqdn" -o tsv)
+          SKILL_URL=$(az containerapp show --name agent-platform-skill --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query "properties.configuration.ingress.fqdn" -o tsv)
+          
+          echo "API_URL=https://$API_URL" >> $GITHUB_ENV
+          echo "AGENT_URL=https://$AGENT_URL" >> $GITHUB_ENV
+          echo "LIFECYCLE_URL=https://$LIFECYCLE_URL" >> $GITHUB_ENV
+          echo "SKILL_URL=https://$SKILL_URL" >> $GITHUB_ENV
+
+      # Configure service URLs for cross-service communication
+      - name: Update service URLs
+        run: |
+          # Update API service with URLs
+          az containerapp update \
+            --name agent-platform-api \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --set-env-vars "API_SERVICE_URL=${{ env.API_URL }}" \
+                          "AGENT_SERVICE_URL=${{ env.AGENT_URL }}" \
+                          "AGENT_LIFECYCLE_SERVICE_URL=${{ env.LIFECYCLE_URL }}" \
+                          "SKILL_SERVICE_URL=${{ env.SKILL_URL }}"
+          
+          # Update Agent service with URLs
+          az containerapp update \
+            --name agent-platform-agent \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --set-env-vars "API_SERVICE_URL=${{ env.API_URL }}" \
+                          "AGENT_SERVICE_URL=${{ env.AGENT_URL }}" \
+                          "AGENT_LIFECYCLE_SERVICE_URL=${{ env.LIFECYCLE_URL }}" \
+                          "SKILL_SERVICE_URL=${{ env.SKILL_URL }}"
+          
+          # Update Lifecycle service with URLs
+          az containerapp update \
+            --name agent-platform-lifecycle \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --set-env-vars "API_SERVICE_URL=${{ env.API_URL }}" \
+                          "AGENT_SERVICE_URL=${{ env.AGENT_URL }}" \
+                          "AGENT_LIFECYCLE_SERVICE_URL=${{ env.LIFECYCLE_URL }}" \
+                          "SKILL_SERVICE_URL=${{ env.SKILL_URL }}"
+          
+          # Update Skill service with URLs
+          az containerapp update \
+            --name agent-platform-skill \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --set-env-vars "API_SERVICE_URL=${{ env.API_URL }}" \
+                          "AGENT_SERVICE_URL=${{ env.AGENT_URL }}" \
+                          "AGENT_LIFECYCLE_SERVICE_URL=${{ env.LIFECYCLE_URL }}" \
+                          "SKILL_SERVICE_URL=${{ env.SKILL_URL }}"
+
+      - name: Deployment Summary
+        run: |
+          echo "==========================================="
+          echo "✅ Deployment completed successfully!"
+          echo "API Service: ${{ env.API_URL }}"
+          echo "Agent Service: ${{ env.AGENT_URL }}"
+          echo "Lifecycle Service: ${{ env.LIFECYCLE_URL }}"
+          echo "Skill Service: ${{ env.SKILL_URL }}"
+          echo "==========================================="
