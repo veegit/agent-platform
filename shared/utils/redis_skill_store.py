@@ -154,7 +154,7 @@ class RedisSkillStore:
             await self.redis.delete_key(skill_key)
             
             # Remove from the set of all skills
-            await self.redis.delete_key(self.ALL_SKILLS_KEY)
+            await self.redis.remove_from_set(self.ALL_SKILLS_KEY, skill_id)
             
             logger.info(f"Deleted skill {skill_id}")
             return True
