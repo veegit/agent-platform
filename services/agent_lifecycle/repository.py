@@ -143,7 +143,8 @@ class AgentRepository:
             llm=LLMConfig(
                 model_name="llama3-70b-8192"
             ),
-            skills=skills or []
+            skills=skills or [],
+            is_supervisor=False
         )
         
     async def get_agent(self, agent_id: str) -> Optional[Agent]:

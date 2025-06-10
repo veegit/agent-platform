@@ -28,7 +28,8 @@ class Agent:
         self,
         config: AgentConfig,
         memory_manager: Optional[MemoryManager] = None,
-        skill_client: Optional[SkillServiceClient] = None
+        skill_client: Optional[SkillServiceClient] = None,
+        delegations: Optional[Dict[str, Dict[str, Any]]] = None,
     ):
         """Initialize the agent.
         
@@ -41,6 +42,7 @@ class Agent:
         self.memory_manager = memory_manager or MemoryManager()
         self.skill_client = skill_client or SkillServiceClient()
         self.graph = create_agent_graph(config, skill_client)
+        self.delegations = delegations or {}
         
         logger.info(f"Initialized agent {config.agent_id} with name '{config.persona.name}'")
     
@@ -66,7 +68,21 @@ class Agent:
             AgentOutput: The agent's output.
         """
         logger.info(f"Processing message for agent {self.config.agent_id}")
-        
+
+        # If this agent is a supervisor, check delegations
+        if self.config.is_supervisor and self.delegations:
+            lower = user_message.lower()
+            for domain, info in self.delegations.items():
+                keywords = info.get("keywords", [])
+                agent = info.get("agent")
+                if agent and any(k in lower for k in keywords):
+                    logger.info(
+                        f"Delegating message about {domain} to {agent.config.agent_id}"
+                    )
+                    return await agent.process_message(
+                        user_message, user_id, conversation_id
+                    )
+
         # Generate conversation ID if not provided
         conversation_id = conversation_id or str(uuid.uuid4())
         

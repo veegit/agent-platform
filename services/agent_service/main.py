@@ -127,8 +127,9 @@ async def startup_event():
     # Initialize memory manager
     await memory_manager.initialize()
     
-    # Create a demo agent
+    # Create a demo supervisor agent
     demo_agent_id = "demo-agent"
+    finance_agent_id = "finance-agent"
     
     # Get available skills from skill service
     try:
@@ -137,34 +138,91 @@ async def startup_event():
         logger.info(f"Found {len(skill_ids)} available skills: {skill_ids}")
     except Exception as e:
         logger.error(f"Failed to get available skills: {e}")
-        skill_ids = ["web-search", "summarize-text", "ask-follow-up"]
-    
-    # Create demo agent config
+        skill_ids = ["web-search", "summarize-text", "ask-follow-up", "finance"]
+
+    # Skills for the supervisor exclude skills handled by delegate agents
+    supervisor_skill_ids = [s for s in skill_ids if s != "finance"]
+
+    # Load delegation rules from Redis
+    delegations = await redis_manager.delegations.get_all_domains()
+    if "finance" not in delegations:
+        await redis_manager.delegations.register_domain(
+            "finance", finance_agent_id, ["stock", "share", "ticker"], ["finance"]
+        )
+        delegations = await redis_manager.delegations.get_all_domains()
+
+    delegate_agents: Dict[str, Dict[str, Any]] = {}
+    for domain, info in delegations.items():
+        agent_id = info.get("agent_id")
+        keywords = info.get("keywords", [])
+        agent: Optional[Agent] = None
+
+        if agent_id in agent_registry:
+            agent = agent_registry[agent_id]
+        else:
+            agent_data = await redis_manager.agent_store.get_agent(agent_id)
+            if agent_data:
+                cfg = AgentConfig(**agent_data["config"])
+                agent = Agent(cfg, memory_manager=memory_manager, skill_client=skill_client)
+                await agent.initialize()
+                agent_registry[agent_id] = agent
+            elif domain == "finance":
+                finance_config = AgentConfig(
+                    agent_id=finance_agent_id,
+                    persona=AgentPersona(
+                        name="Finance Analyst",
+                        description="Specialist agent for finance and stock market queries.",
+                        goals=["Provide accurate market data"],
+                        constraints=["Do not offer financial advice"],
+                        tone="professional",
+                        system_prompt="You are a finance analyst. Answer questions about stocks and markets.",
+                    ),
+                    reasoning_model=ReasoningModel.LLAMA3_70B,
+                    skills=skill_ids,
+                    memory=MemoryConfig(
+                        max_messages=50,
+                        summarize_after=20,
+                        long_term_memory_enabled=True,
+                        key_fact_extraction_enabled=True,
+                    ),
+                    is_supervisor=False,
+                )
+                agent = Agent(finance_config, memory_manager=memory_manager, skill_client=skill_client)
+                await agent.initialize()
+                agent_registry[agent_id] = agent
+
+        if agent:
+            delegate_agents[domain] = {"agent": agent, "keywords": keywords}
+
+
+    # Create demo supervisor agent config
     demo_config = AgentConfig(
         agent_id=demo_agent_id,
         persona=AgentPersona(
-            name="Research Assistant",
-            description="A helpful research assistant that can search the web and summarize information.",
-            goals=["Provide accurate information", "Assist with research tasks"],
+            name="Supervisor Agent",
+            description="Coordinates specialized agents like the Finance Agent to assist with complex queries.",
+            goals=["Provide accurate information", "Delegate to domain experts when necessary"],
             constraints=["Do not make up facts", "Cite sources when possible"],
             tone="professional and helpful",
-            system_prompt="You are a research assistant that helps users find and understand information. Always strive to provide factual, accurate responses and assist the user with their research needs."
+            system_prompt="You manage a team of expert agents. Delegate finance questions to the Finance Agent and combine results for the user."
         ),
         reasoning_model=ReasoningModel.LLAMA3_70B,
-        skills=skill_ids,
+        skills=supervisor_skill_ids,
         memory=MemoryConfig(
             max_messages=50,
             summarize_after=20,
             long_term_memory_enabled=True,
             key_fact_extraction_enabled=True
-        )
+        ),
+        is_supervisor=True
     )
     
     # Create demo agent
     demo_agent = Agent(
         config=demo_config,
         memory_manager=memory_manager,
-        skill_client=skill_client
+        skill_client=skill_client,
+        delegations=delegate_agents,
     )
     
     # Initialize agent
