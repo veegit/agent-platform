@@ -227,11 +227,11 @@ The platform comes with several built-in skills:
 
 ### Adding Domain Agents
 
-Supervisor agents delegate tasks based on domain mappings stored in Redis. The
-Supervisor itself has no skills and instead forwards requests to specialized
-agents like the Demo Agent or Finance Agent. To add a new specialized agent
-(e.g., Bluesky or Foursquare), register its domain, keywords, and agent ID in
-Redis so the Supervisor can route matching queries.
+Supervisor agents delegate tasks using LLM reasoning over domain mappings stored in
+Redis. The Supervisor itself has no skills and instead uses its reasoning model to
+select an agent such as the Demo Agent or Finance Agent. To add a new specialized
+agent (e.g., Bluesky or Foursquare), register its domain and agent ID in Redis and
+the Supervisor will route matching queries based on the reasoning output.
 
 ## Service Ports
 

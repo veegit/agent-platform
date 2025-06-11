@@ -94,6 +94,7 @@ from services.agent_service.memory import MemoryManager
 from services.agent_service.agent import Agent
 import services.agent_service.agent as agent_module
 from services.agent_service.models.config import AgentConfig, AgentPersona, MemoryConfig, ReasoningModel
+from services.agent_service import llm
 from services.agent_service.models.state import AgentState, Message, MessageRole, AgentOutput
 
 
@@ -107,7 +108,7 @@ class DummyGraph:
     async def invoke(self, state_dict):
         return await self.ainvoke(state_dict)
 
-def test_supervisor_finance_delegation():
+def test_supervisor_finance_delegation(monkeypatch):
     agent_module.create_agent_graph = lambda config, skill_client=None: DummyGraph()
 
     manager = RedisManager(host='localhost', port=6379, db=0)
@@ -156,10 +157,19 @@ def test_supervisor_finance_delegation():
         is_supervisor=True
     )
 
+    async def dummy_call_llm(messages, **kwargs):
+        content = messages[-1]['content'].lower()
+        if 'stock' in content or 'share' in content or 'ticker' in content:
+            return {'domain': 'finance'}
+        return {'domain': None}
+
+    monkeypatch.setattr(llm, 'call_llm', dummy_call_llm)
+    monkeypatch.setattr(agent_module, 'call_llm', dummy_call_llm)
+
     supervisor = Agent(
         supervisor_config,
         memory_manager=mem,
-        delegations={'finance': {'agent': finance_agent, 'keywords': ['stock', 'share', 'ticker']}}
+        delegations={'finance': {'agent': finance_agent}}
     )
     asyncio.run(supervisor.initialize())
 
@@ -170,7 +180,7 @@ def test_supervisor_finance_delegation():
     assert out2.message.content == 'ack'
 
 
-def test_supervisor_general_delegation():
+def test_supervisor_general_delegation(monkeypatch):
     agent_module.create_agent_graph = lambda config, skill_client=None: DummyGraph()
 
     manager = RedisManager(host='localhost', port=6379, db=0)
@@ -212,10 +222,16 @@ def test_supervisor_general_delegation():
         is_supervisor=True
     )
 
+    async def dummy_call_llm(messages, **kwargs):
+        return {'domain': 'general'}
+
+    monkeypatch.setattr(llm, 'call_llm', dummy_call_llm)
+    monkeypatch.setattr(agent_module, 'call_llm', dummy_call_llm)
+
     supervisor = Agent(
         supervisor_config,
         memory_manager=mem,
-        delegations={'general': {'agent': demo_agent, 'keywords': ['search']}}
+        delegations={'general': {'agent': demo_agent}}
     )
     asyncio.run(supervisor.initialize())
 
