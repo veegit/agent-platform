@@ -72,16 +72,26 @@ class Agent:
         # If this agent is a supervisor, check delegations
         if self.config.is_supervisor and self.delegations:
             lower = user_message.lower()
+            matched_agent: Optional[Agent] = None
             for domain, info in self.delegations.items():
                 keywords = info.get("keywords", [])
                 agent = info.get("agent")
                 if agent and any(k in lower for k in keywords):
+                    matched_agent = agent
                     logger.info(
                         f"Delegating message about {domain} to {agent.config.agent_id}"
                     )
-                    return await agent.process_message(
-                        user_message, user_id, conversation_id
+                    break
+
+            if not matched_agent and "general" in self.delegations:
+                matched_agent = self.delegations["general"].get("agent")
+                if matched_agent:
+                    logger.info(
+                        f"Delegating message to general agent {matched_agent.config.agent_id}"
                     )
+
+            if matched_agent:
+                return await matched_agent.process_message(user_message, user_id, conversation_id)
 
         # Generate conversation ID if not provided
         conversation_id = conversation_id or str(uuid.uuid4())

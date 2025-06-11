@@ -154,7 +154,7 @@ curl -X POST http://localhost:8001/agents -H "Content-Type: application/json" -d
       "temperature": 0.7,
       "max_tokens": 2000
     },
-    "skills": ["web-search", "summarize-text", "ask-follow-up"],
+    "skills": [],
     "memory": {
       "max_messages": 50,
       "summarize_after": 20,
@@ -227,9 +227,11 @@ The platform comes with several built-in skills:
 
 ### Adding Domain Agents
 
-Supervisor agents delegate tasks based on domain mappings stored in Redis. To
-add a new specialized agent (e.g., Bluesky or Foursquare), register its domain,
-keywords, and agent ID in Redis so the Supervisor can route matching queries.
+Supervisor agents delegate tasks based on domain mappings stored in Redis. The
+Supervisor itself has no skills and instead forwards requests to specialized
+agents like the Demo Agent or Finance Agent. To add a new specialized agent
+(e.g., Bluesky or Foursquare), register its domain, keywords, and agent ID in
+Redis so the Supervisor can route matching queries.
 
 ## Service Ports
 

@@ -127,7 +127,8 @@ async def startup_event():
     # Initialize memory manager
     await memory_manager.initialize()
     
-    # Create a demo supervisor agent
+    # Create default agents
+    supervisor_agent_id = "supervisor-agent"
     demo_agent_id = "demo-agent"
     finance_agent_id = "finance-agent"
     
@@ -140,14 +141,20 @@ async def startup_event():
         logger.error(f"Failed to get available skills: {e}")
         skill_ids = ["web-search", "summarize-text", "ask-follow-up", "finance"]
 
-    # Skills for the supervisor exclude skills handled by delegate agents
-    supervisor_skill_ids = [s for s in skill_ids if s != "finance"]
+    # Skills for the general demo agent exclude finance-specific skills
+    general_skill_ids = [s for s in skill_ids if s != "finance"]
 
     # Load delegation rules from Redis
     delegations = await redis_manager.delegations.get_all_domains()
     if "finance" not in delegations:
         await redis_manager.delegations.register_domain(
             "finance", finance_agent_id, ["stock", "share", "ticker"], ["finance"]
+        )
+        delegations = await redis_manager.delegations.get_all_domains()
+
+    if "general" not in delegations:
+        await redis_manager.delegations.register_domain(
+            "general", demo_agent_id, ["search", "summarize", "follow-up"], general_skill_ids
         )
         delegations = await redis_manager.delegations.get_all_domains()
 
@@ -190,47 +197,83 @@ async def startup_event():
                 agent = Agent(finance_config, memory_manager=memory_manager, skill_client=skill_client)
                 await agent.initialize()
                 agent_registry[agent_id] = agent
+            elif domain == "general":
+                demo_config = AgentConfig(
+                    agent_id=demo_agent_id,
+                    persona=AgentPersona(
+                        name="Demo Agent",
+                        description="General purpose agent with basic skills.",
+                        goals=["Help with everyday questions"],
+                        constraints=["Be concise"],
+                        tone="helpful",
+                        system_prompt="You are a helpful assistant for general queries.",
+                    ),
+                    reasoning_model=ReasoningModel.LLAMA3_70B,
+                    skills=general_skill_ids,
+                    memory=MemoryConfig(),
+                    is_supervisor=False,
+                )
+                agent = Agent(demo_config, memory_manager=memory_manager, skill_client=skill_client)
+                await agent.initialize()
+                agent_registry[agent_id] = agent
 
         if agent:
             delegate_agents[domain] = {"agent": agent, "keywords": keywords}
 
 
-    # Create demo supervisor agent config
+    # Create supervisor agent config
+    supervisor_config = AgentConfig(
+        agent_id=supervisor_agent_id,
+        persona=AgentPersona(
+            name="Supervisor Agent",
+            description="Coordinates specialized agents and delegates based on domain skills.",
+            goals=["Provide accurate information", "Delegate to domain experts"],
+            constraints=["Do not make up facts"],
+            tone="professional and helpful",
+            system_prompt="You manage specialized agents and route requests to them.",
+        ),
+        reasoning_model=ReasoningModel.LLAMA3_70B,
+        skills=[],
+        memory=MemoryConfig(),
+        is_supervisor=True,
+    )
+
     demo_config = AgentConfig(
         agent_id=demo_agent_id,
         persona=AgentPersona(
-            name="Supervisor Agent",
-            description="Coordinates specialized agents like the Finance Agent to assist with complex queries.",
-            goals=["Provide accurate information", "Delegate to domain experts when necessary"],
-            constraints=["Do not make up facts", "Cite sources when possible"],
-            tone="professional and helpful",
-            system_prompt="You manage a team of expert agents. Delegate finance questions to the Finance Agent and combine results for the user."
+            name="Demo Agent",
+            description="General purpose agent with basic skills.",
+            goals=["Help with everyday questions"],
+            constraints=["Be concise"],
+            tone="helpful",
+            system_prompt="You are a helpful assistant for general queries.",
         ),
         reasoning_model=ReasoningModel.LLAMA3_70B,
-        skills=supervisor_skill_ids,
-        memory=MemoryConfig(
-            max_messages=50,
-            summarize_after=20,
-            long_term_memory_enabled=True,
-            key_fact_extraction_enabled=True
-        ),
-        is_supervisor=True
+        skills=general_skill_ids,
+        memory=MemoryConfig(),
+        is_supervisor=False,
     )
-    
-    # Create demo agent
-    demo_agent = Agent(
-        config=demo_config,
+
+    supervisor_agent = Agent(
+        config=supervisor_config,
         memory_manager=memory_manager,
         skill_client=skill_client,
         delegations=delegate_agents,
     )
-    
-    # Initialize agent
+
+    demo_agent = Agent(
+        config=demo_config,
+        memory_manager=memory_manager,
+        skill_client=skill_client,
+    )
+
+    await supervisor_agent.initialize()
     await demo_agent.initialize()
-    
-    # Add to registry
+
+    agent_registry[supervisor_agent_id] = supervisor_agent
     agent_registry[demo_agent_id] = demo_agent
-    
+
+    logger.info(f"Created supervisor agent {supervisor_agent_id}")
     logger.info(f"Created demo agent {demo_agent_id}")
     logger.info("Agent Service started successfully")
 

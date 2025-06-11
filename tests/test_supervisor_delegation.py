@@ -168,3 +168,56 @@ def test_supervisor_finance_delegation():
 
     out2 = asyncio.run(supervisor.process_message('hello there', 'user1'))
     assert out2.message.content == 'ack'
+
+
+def test_supervisor_general_delegation():
+    agent_module.create_agent_graph = lambda config, skill_client=None: DummyGraph()
+
+    manager = RedisManager(host='localhost', port=6379, db=0)
+    asyncio.run(manager.connect())
+    mem = MemoryManager(manager)
+    asyncio.run(mem.initialize())
+
+    demo_config = AgentConfig(
+        agent_id='demo-agent',
+        persona=AgentPersona(
+            name='Demo',
+            description='General agent',
+            goals=[],
+            constraints=[],
+            tone='neutral',
+            system_prompt=''
+        ),
+        reasoning_model=ReasoningModel.LLAMA3_70B,
+        skills=['web-search'],
+        memory=MemoryConfig(),
+        is_supervisor=False
+    )
+
+    demo_agent = Agent(demo_config, memory_manager=mem)
+
+    async def dummy_demo(msg, user_id, conversation_id=None):
+        message = Message(id='d1', role=MessageRole.AGENT, content='demo response', timestamp=datetime.now())
+        state = AgentState(agent_id='demo-agent', conversation_id=conversation_id or 'c1', user_id=user_id, messages=[message])
+        return AgentOutput(message=message, state=state)
+
+    demo_agent.process_message = dummy_demo
+
+    supervisor_config = AgentConfig(
+        agent_id='supervisor-agent',
+        persona=AgentPersona(name='Sup', description='sup', goals=[], constraints=[], tone='helpful', system_prompt=''),
+        reasoning_model=ReasoningModel.LLAMA3_70B,
+        skills=[],
+        memory=MemoryConfig(),
+        is_supervisor=True
+    )
+
+    supervisor = Agent(
+        supervisor_config,
+        memory_manager=mem,
+        delegations={'general': {'agent': demo_agent, 'keywords': ['search']}}
+    )
+    asyncio.run(supervisor.initialize())
+
+    out = asyncio.run(supervisor.process_message('search the web', 'u1'))
+    assert out.message.content == 'demo response'
