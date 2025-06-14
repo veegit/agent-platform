@@ -10,6 +10,7 @@ from shared.utils.redis_client import RedisClient
 from shared.utils.redis_agent_store import RedisAgentStore
 from shared.utils.redis_conversation_store import RedisConversationStore
 from shared.utils.redis_skill_store import RedisSkillStore
+from shared.utils.redis_delegation_store import RedisDelegationStore
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ class RedisManager:
         self.agent_store = None
         self.conversation_store = None
         self.skill_store = None
+        self.delegation_store = None
         
         self._max_retries = 5
         self._retry_delay = 1  # seconds
@@ -81,6 +83,7 @@ class RedisManager:
                 self.agent_store = RedisAgentStore(self.redis_client)
                 self.conversation_store = RedisConversationStore(self.redis_client)
                 self.skill_store = RedisSkillStore(self.redis_client)
+                self.delegation_store = RedisDelegationStore(self.redis_client)
                 
                 # Start health check
                 self._start_health_check()
@@ -110,6 +113,7 @@ class RedisManager:
             self.agent_store = None
             self.conversation_store = None
             self.skill_store = None
+            self.delegation_store = None
             
             logger.info("Disconnected from Redis")
     
@@ -165,8 +169,13 @@ class RedisManager:
     @property
     def skills(self) -> Optional[RedisSkillStore]:
         """Get the skill store.
-        
+
         Returns:
             Optional[RedisSkillStore]: The skill store or None if not connected.
         """
         return self.skill_store
+
+    @property
+    def delegations(self) -> Optional[RedisDelegationStore]:
+        """Get the delegation store."""
+        return self.delegation_store

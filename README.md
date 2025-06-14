@@ -20,6 +20,7 @@ All services use Redis for state management and inter-service communication.
 - Redis (for local development)
 - SerpAPI key for web search skill (https://serpapi.com/)
 - Groq API key for LLM access (https://console.groq.com/)
+- Alpha Vantage API key for finance skill (https://www.alphavantage.co/)
 
 ### Local Installation
 1. Clone the repository
@@ -49,6 +50,7 @@ All services use Redis for state management and inter-service communication.
    ```
    SERPAPI_API_KEY=your_serpapi_key_here
    GROQ_API_KEY=your_groq_api_key_here
+   ALPHAVANTAGE_API_KEY=your_alpha_vantage_key_here
    ```
 
 ### Docker Installation
@@ -140,19 +142,19 @@ curl -X POST http://localhost:8001/agents -H "Content-Type: application/json" -d
   "config": {
     "agent_id": "",
     "persona": {
-      "name": "Research Assistant",
-      "description": "A helpful research assistant that can search the web and summarize information",
-      "goals": ["Provide accurate information", "Help users with research tasks"],
+      "name": "Supervisor Agent",
+      "description": "Coordinates specialized agents like the Finance Agent to assist with complex queries",
+      "goals": ["Provide accurate information", "Delegate to domain experts when necessary"],
       "constraints": ["Only use verified sources", "Respect user privacy"],
       "tone": "helpful and friendly",
-      "system_prompt": "You are a research assistant. Help users find and summarize information from the web."
+      "system_prompt": "You manage a team of expert agents. Delegate finance questions to the Finance Agent and combine results for the user."
     },
     "llm": {
       "model_name": "llama3-70b-8192",
       "temperature": 0.7,
       "max_tokens": 2000
     },
-    "skills": ["web-search", "summarize-text", "ask-follow-up"],
+    "skills": [],
     "memory": {
       "max_messages": 50,
       "summarize_after": 20,
@@ -220,6 +222,18 @@ The platform comes with several built-in skills:
 
 3. **Ask Follow-up Questions** (`ask-follow-up`): Generate follow-up questions based on context
    - Parameters: `context`, `num_questions`
+4. **Finance Skill** (`finance`): Get the latest stock price using Alpha Vantage
+   - Parameters: `symbol`
+
+### Adding Domain Agents
+
+Supervisor agents delegate tasks using LLM reasoning over domain mappings stored in
+Redis. The Supervisor itself has no skills and instead uses its reasoning model to
+select an agent such as the Demo Agent or Finance Agent. To add a new specialized
+agent (e.g., Bluesky or Foursquare), register its domain and agent ID in Redis and
+the Supervisor will route matching queries based on the reasoning output. If the
+selected agent lacks the required skills or cannot answer, the Supervisor falls
+back to a general agent.
 
 ## Service Ports
 
@@ -250,6 +264,7 @@ Redis is used for:
 - Managing conversation history
 - Tracking agent state
 - Storing skill registrations and results
+- Maintaining a domain -> agent delegation registry for supervisor agents
 
 ### Service Communication
 

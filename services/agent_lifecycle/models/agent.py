@@ -50,14 +50,15 @@ class MemoryConfig(BaseModel):
 
 class AgentConfig(BaseModel):
     """Configuration for an agent."""
-    
+
     agent_id: str = Field(..., description="Unique identifier for the agent")
     persona: AgentPersona = Field(..., description="Agent's persona")
     llm: LLMConfig = Field(..., description="LLM configuration")
     skills: List[str] = Field(default_factory=list, description="Skills available to the agent")
     memory: MemoryConfig = Field(default_factory=MemoryConfig, description="Configuration for agent memory")
+    is_supervisor: bool = Field(default=False, description="Whether this agent acts as a Supervisor")
     default_skill_params: Dict[str, Dict[str, Any]] = Field(
-        default_factory=dict, 
+        default_factory=dict,
         description="Default parameters for skills, keyed by skill_id"
     )
     additional_config: Dict[str, Any] = Field(default_factory=dict, description="Additional configuration options")
@@ -116,7 +117,7 @@ class AgentListResponse(BaseModel):
 
 class StatusResponse(BaseModel):
     """Response model for status updates."""
-    
+
     agent_id: str = Field(..., description="Unique identifier for the agent")
     status: AgentStatus = Field(..., description="Status of the agent")
     message: str = Field(..., description="Status message")
