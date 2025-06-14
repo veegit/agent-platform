@@ -237,3 +237,71 @@ def test_supervisor_general_delegation(monkeypatch):
 
     out = asyncio.run(supervisor.process_message('search the web', 'u1'))
     assert out.message.content == 'demo response'
+
+
+def test_supervisor_fallback_when_agent_has_no_skills(monkeypatch):
+    agent_module.create_agent_graph = lambda config, skill_client=None: DummyGraph()
+
+    manager = RedisManager(host='localhost', port=6379, db=0)
+    asyncio.run(manager.connect())
+    mem = MemoryManager(manager)
+    asyncio.run(mem.initialize())
+
+    finance_config = AgentConfig(
+        agent_id='finance-agent',
+        persona=AgentPersona(name='Fin', description='none', goals=[], constraints=[], tone='neutral', system_prompt=''),
+        reasoning_model=ReasoningModel.LLAMA3_70B,
+        skills=[],
+        memory=MemoryConfig(),
+        is_supervisor=False
+    )
+
+    finance_agent = Agent(finance_config, memory_manager=mem)
+
+    async def should_not_run(*a, **k):
+        raise AssertionError('finance agent should not run')
+
+    finance_agent.process_message = should_not_run
+
+    demo_config = AgentConfig(
+        agent_id='demo-agent',
+        persona=AgentPersona(name='Demo', description='gen', goals=[], constraints=[], tone='neutral', system_prompt=''),
+        reasoning_model=ReasoningModel.LLAMA3_70B,
+        skills=['web-search'],
+        memory=MemoryConfig(),
+        is_supervisor=False
+    )
+
+    demo_agent = Agent(demo_config, memory_manager=mem)
+
+    async def dummy_demo(msg, user_id, conversation_id=None):
+        message = Message(id='d2', role=MessageRole.AGENT, content='demo fallback', timestamp=datetime.now())
+        state = AgentState(agent_id='demo-agent', conversation_id=conversation_id or 'c2', user_id=user_id, messages=[message])
+        return AgentOutput(message=message, state=state)
+
+    demo_agent.process_message = dummy_demo
+
+    supervisor_config = AgentConfig(
+        agent_id='supervisor-agent',
+        persona=AgentPersona(name='Sup', description='sup', goals=[], constraints=[], tone='helpful', system_prompt=''),
+        reasoning_model=ReasoningModel.LLAMA3_70B,
+        skills=[],
+        memory=MemoryConfig(),
+        is_supervisor=True
+    )
+
+    async def dummy_call_llm(messages, **kwargs):
+        return {'domain': 'finance'}
+
+    monkeypatch.setattr(llm, 'call_llm', dummy_call_llm)
+    monkeypatch.setattr(agent_module, 'call_llm', dummy_call_llm)
+
+    supervisor = Agent(
+        supervisor_config,
+        memory_manager=mem,
+        delegations={'finance': {'agent': finance_agent}, 'general': {'agent': demo_agent}}
+    )
+    asyncio.run(supervisor.initialize())
+
+    out = asyncio.run(supervisor.process_message('price TSLA stock', 'u1'))
+    assert out.message.content == 'demo fallback'

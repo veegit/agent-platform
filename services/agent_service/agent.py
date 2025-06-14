@@ -105,10 +105,15 @@ class Agent:
 
             domain = await self._determine_domain(user_message)
             if domain and domain in self.delegations:
-                matched_agent = self.delegations[domain].get("agent")
-                if matched_agent:
+                candidate = self.delegations[domain].get("agent")
+                if candidate and candidate.config.skills:
+                    matched_agent = candidate
                     logger.info(
-                        f"Delegating message about {domain} to {matched_agent.config.agent_id}"
+                        f"Delegating message about {domain} to {candidate.config.agent_id}"
+                    )
+                else:
+                    logger.info(
+                        f"Agent for domain {domain} unavailable or lacks skills, falling back"
                     )
 
             if not matched_agent and "general" in self.delegations:
