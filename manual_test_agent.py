@@ -89,11 +89,11 @@ async def main():
     """Main function."""
     print("Testing the Agent Platform")
     
-    # First, try to use the demo agent
-    demo_agent_id = "demo-agent"
-    
-    print("Starting conversation with demo agent...")
-    demo_conv = await start_conversation(demo_agent_id)
+    # First, try to use the default fallback agent
+    default_agent_id = "default-agent"
+
+    print("Starting conversation with default agent...")
+    demo_conv = await start_conversation(default_agent_id)
     
     if not demo_conv:
         print("Creating new agent...")

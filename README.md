@@ -229,7 +229,7 @@ The platform comes with several built-in skills:
 
 Supervisor agents delegate tasks using LLM reasoning over domain mappings stored in
 Redis. The Supervisor itself has no skills and instead uses its reasoning model to
-select an agent such as the Demo Agent or Finance Agent. To add a new specialized
+select an agent such as the Default Agent or Finance Agent. To add a new specialized
 agent (e.g., Bluesky or Foursquare), register its domain and agent ID in Redis and
 the Supervisor will route matching queries based on the reasoning output. If the
 selected agent lacks the required skills or cannot answer, the Supervisor falls

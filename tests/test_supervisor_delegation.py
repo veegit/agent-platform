@@ -189,9 +189,9 @@ def test_supervisor_general_delegation(monkeypatch):
     asyncio.run(mem.initialize())
 
     demo_config = AgentConfig(
-        agent_id='demo-agent',
+        agent_id='default-agent',
         persona=AgentPersona(
-            name='Demo',
+            name='Default',
             description='General agent',
             goals=[],
             constraints=[],
@@ -207,8 +207,8 @@ def test_supervisor_general_delegation(monkeypatch):
     demo_agent = Agent(demo_config, memory_manager=mem)
 
     async def dummy_demo(msg, user_id, conversation_id=None):
-        message = Message(id='d1', role=MessageRole.AGENT, content='demo response', timestamp=datetime.now())
-        state = AgentState(agent_id='demo-agent', conversation_id=conversation_id or 'c1', user_id=user_id, messages=[message])
+        message = Message(id='d1', role=MessageRole.AGENT, content='default response', timestamp=datetime.now())
+        state = AgentState(agent_id='default-agent', conversation_id=conversation_id or 'c1', user_id=user_id, messages=[message])
         return AgentOutput(message=message, state=state)
 
     demo_agent.process_message = dummy_demo
@@ -236,7 +236,7 @@ def test_supervisor_general_delegation(monkeypatch):
     asyncio.run(supervisor.initialize())
 
     out = asyncio.run(supervisor.process_message('search the web', 'u1'))
-    assert out.message.content == 'demo response'
+    assert out.message.content == 'default response'
 
 
 def test_supervisor_fallback_when_agent_has_no_skills(monkeypatch):
@@ -264,8 +264,8 @@ def test_supervisor_fallback_when_agent_has_no_skills(monkeypatch):
     finance_agent.process_message = should_not_run
 
     demo_config = AgentConfig(
-        agent_id='demo-agent',
-        persona=AgentPersona(name='Demo', description='gen', goals=[], constraints=[], tone='neutral', system_prompt=''),
+        agent_id='default-agent',
+        persona=AgentPersona(name='Default', description='gen', goals=[], constraints=[], tone='neutral', system_prompt=''),
         reasoning_model=ReasoningModel.LLAMA3_70B,
         skills=['web-search'],
         memory=MemoryConfig(),
@@ -275,8 +275,8 @@ def test_supervisor_fallback_when_agent_has_no_skills(monkeypatch):
     demo_agent = Agent(demo_config, memory_manager=mem)
 
     async def dummy_demo(msg, user_id, conversation_id=None):
-        message = Message(id='d2', role=MessageRole.AGENT, content='demo fallback', timestamp=datetime.now())
-        state = AgentState(agent_id='demo-agent', conversation_id=conversation_id or 'c2', user_id=user_id, messages=[message])
+        message = Message(id='d2', role=MessageRole.AGENT, content='default fallback', timestamp=datetime.now())
+        state = AgentState(agent_id='default-agent', conversation_id=conversation_id or 'c2', user_id=user_id, messages=[message])
         return AgentOutput(message=message, state=state)
 
     demo_agent.process_message = dummy_demo
@@ -304,4 +304,4 @@ def test_supervisor_fallback_when_agent_has_no_skills(monkeypatch):
     asyncio.run(supervisor.initialize())
 
     out = asyncio.run(supervisor.process_message('price TSLA stock', 'u1'))
-    assert out.message.content == 'demo fallback'
+    assert out.message.content == 'default fallback'
