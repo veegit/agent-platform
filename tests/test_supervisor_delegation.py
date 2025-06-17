@@ -305,3 +305,60 @@ def test_supervisor_fallback_when_agent_has_no_skills(monkeypatch):
 
     out = asyncio.run(supervisor.process_message('price TSLA stock', 'u1'))
     assert out.message.content == 'default fallback'
+
+
+def test_supervisor_conversation_tracking(monkeypatch):
+    agent_module.create_agent_graph = lambda config, skill_client=None: DummyGraph()
+
+    manager = RedisManager(host='localhost', port=6379, db=0)
+    asyncio.run(manager.connect())
+    mem = MemoryManager(manager)
+    asyncio.run(mem.initialize())
+
+    finance_config = AgentConfig(
+        agent_id='finance-agent',
+        persona=AgentPersona(name='Fin', description='none', goals=[], constraints=[], tone='neutral', system_prompt=''),
+        reasoning_model=ReasoningModel.LLAMA3_70B,
+        skills=['finance'],
+        memory=MemoryConfig(),
+        is_supervisor=False
+    )
+
+    recorded_ids = []
+
+    async def dummy_finance(msg, user_id, conversation_id=None):
+        recorded_ids.append(conversation_id)
+        message = Message(id='f2', role=MessageRole.AGENT, content='finance reply', timestamp=datetime.now())
+        state = AgentState(agent_id='finance-agent', conversation_id=conversation_id or 'c3', user_id=user_id, messages=[message])
+        return AgentOutput(message=message, state=state)
+
+    finance_agent = Agent(finance_config, memory_manager=mem)
+    finance_agent.process_message = dummy_finance
+
+    supervisor_config = AgentConfig(
+        agent_id='supervisor-agent',
+        persona=AgentPersona(name='Sup', description='sup', goals=[], constraints=[], tone='helpful', system_prompt=''),
+        reasoning_model=ReasoningModel.LLAMA3_70B,
+        skills=[],
+        memory=MemoryConfig(),
+        is_supervisor=True
+    )
+
+    async def dummy_call_llm(messages, **kwargs):
+        return {'domain': 'finance'}
+
+    monkeypatch.setattr(llm, 'call_llm', dummy_call_llm)
+    monkeypatch.setattr(agent_module, 'call_llm', dummy_call_llm)
+
+    supervisor = Agent(
+        supervisor_config,
+        memory_manager=mem,
+        delegations={'finance': {'agent': finance_agent}}
+    )
+    asyncio.run(supervisor.initialize())
+
+    out1 = asyncio.run(supervisor.process_message('stock AAPL', 'u1'))
+    conv_id = out1.state.conversation_id
+    out2 = asyncio.run(supervisor.process_message('yes', 'u1', conversation_id=conv_id))
+
+    assert recorded_ids[0] == recorded_ids[1]

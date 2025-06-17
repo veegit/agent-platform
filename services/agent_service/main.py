@@ -140,18 +140,41 @@ async def startup_event():
     existing_agents = await redis_manager.agent_store.list_agents()
 
     if not existing_agents:
+        # ----- Create Finance Agent -----
+        finance_config = AgentConfig(
+            agent_id="finance-agent",
+            persona=AgentPersona(
+                name="Finance Agent",
+                description="Provides stock information",
+                goals=["Answer finance questions"],
+                constraints=["Use the finance skill"],
+                tone="neutral",
+                system_prompt="You are a finance assistant that can retrieve stock prices.",
+            ),
+            reasoning_model=ReasoningModel.LLAMA3_70B,
+            skills=["finance"],
+            memory=MemoryConfig(),
+            is_supervisor=False,
+        )
+
+        finance_agent = Agent(finance_config, memory_manager=memory_manager, skill_client=skill_client)
+        await finance_agent.initialize()
+        agent_registry["finance-agent"] = finance_agent
+        await redis_manager.delegation_store.register_domain("finance", "finance-agent", ["stock", "share", "ticker"], ["finance"])
+
+        # ----- Create Default General Agent -----
         default_agent_id = "default-agent"
         general_skill_ids = [s for s in skill_ids if s != "finance"]
 
         default_config = AgentConfig(
             agent_id=default_agent_id,
             persona=AgentPersona(
-                name="Fallback Agent",
-                description="General purpose agent used when no other agents are available.",
-                goals=["Help with everyday questions"],
+                name="General Agent",
+                description="Handles general questions",
+                goals=["Assist with everyday queries"],
                 constraints=["Be concise"],
                 tone="helpful",
-                system_prompt="You are a helpful fallback assistant.",
+                system_prompt="You are a helpful general assistant.",
             ),
             reasoning_model=ReasoningModel.LLAMA3_70B,
             skills=general_skill_ids,
@@ -159,16 +182,43 @@ async def startup_event():
             is_supervisor=False,
         )
 
-        fallback_agent = Agent(
-            config=default_config,
+        general_agent = Agent(default_config, memory_manager=memory_manager, skill_client=skill_client)
+        await general_agent.initialize()
+        agent_registry[default_agent_id] = general_agent
+        await redis_manager.delegation_store.register_domain("general", "default-agent", ["general"], general_skill_ids)
+
+        # ----- Create Supervisor Agent -----
+        supervisor_config = AgentConfig(
+            agent_id="supervisor-agent",
+            persona=AgentPersona(
+                name="Supervisor Agent",
+                description="Coordinates specialized agents",
+                goals=["Delegate queries to the right agent"],
+                constraints=["No direct skills"],
+                tone="helpful",
+                system_prompt="You coordinate other agents to answer user questions.",
+            ),
+            reasoning_model=ReasoningModel.LLAMA3_70B,
+            skills=[],
+            memory=MemoryConfig(),
+            is_supervisor=True,
+        )
+
+        supervisor_agent = Agent(
+            supervisor_config,
             memory_manager=memory_manager,
             skill_client=skill_client,
+            delegations={
+                "finance": {"agent": finance_agent},
+                "general": {"agent": general_agent},
+            },
         )
-        await fallback_agent.initialize()
-        agent_registry[default_agent_id] = fallback_agent
-        logger.info(f"Created fallback agent {default_agent_id}")
+        await supervisor_agent.initialize()
+        agent_registry["supervisor-agent"] = supervisor_agent
+
+        logger.info("Created supervisor, finance, and general agents")
     else:
-        logger.info(f"Existing agents found: {existing_agents}. No fallback agent created")
+        logger.info(f"Existing agents found: {existing_agents}. No default agents created")
 
     logger.info("Agent Service started successfully")
 
