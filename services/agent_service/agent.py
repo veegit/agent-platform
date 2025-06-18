@@ -70,9 +70,21 @@ class Agent:
                 system_prompt=system_prompt,
                 output_schema=schema,
             )
-            domain = (result.get("domain") or result.get("content") or "").strip().strip(". ").lower()
-            if domain:
-                return domain
+            domain_raw = (
+                result.get("domain")
+                or result.get("content")
+                or ""
+            ).strip().lower()
+
+            if domain_raw:
+                # Allow responses like "finance agent" or "use the finance domain"
+                for registered_domain in self.delegations.keys():
+                    if registered_domain in domain_raw:
+                        logger.info(
+                            f"LLM suggested domain '{domain_raw}', matched '{registered_domain}'"
+                        )
+                        return registered_domain
+                logger.info(f"LLM suggested unknown domain '{domain_raw}'")
         except Exception as e:
             logger.error(f"Failed to determine domain via LLM: {e}")
 
