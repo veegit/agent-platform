@@ -359,15 +359,20 @@ IMPORTANT JSON FORMATTING INSTRUCTIONS:
         skill_id = llm_response.get("skill_id")
         skill_parameters = llm_response.get("skill_parameters", {})
         skill_reason = llm_response.get("skill_reason", "")
-        
         # Build skill_to_use_data from the flattened properties
-        skill_to_use_data = None
+        skill_to_use_data: Optional[Dict[str, Any]] = None
+        skill_to_use: Optional[SkillChoice] = None
         if skill_id and not should_respond_directly:
             skill_to_use_data = {
                 "skill_id": skill_id,
                 "parameters": skill_parameters or {},
                 "reason": skill_reason or "This skill is appropriate for the user's request."
             }
+            skill_to_use = SkillChoice(
+                skill_id=skill_id,
+                parameters=skill_parameters or {},
+                reason=skill_reason or "This skill is appropriate for the user's request."
+            )
         
         # Override decision for news queries if web search is available
         if should_use_web_search and web_search_available:
