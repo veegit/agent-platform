@@ -111,6 +111,28 @@ async def call_llm(
             else:
                 error_message = f"Groq API request failed with status code {response.status_code}: {response.text}"
                 logger.error(error_message)
+                try:
+                    data = response.json()
+                except Exception:
+                    data = {}
+
+                failed = None
+                if response.status_code == 400 and isinstance(data, dict):
+                    failed = data.get("error", {}).get("failed_generation")
+
+                if failed:
+                    logger.info("Attempting to parse failed_generation content")
+                    # Try simple cleanup of common issues
+                    cleaned = failed.strip()
+                    # Remove unmatched closing braces/quotes at the end
+                    cleaned = cleaned.rstrip("}\n ")
+                    if not cleaned.endswith("}"):
+                        cleaned += "}"
+                    try:
+                        return json.loads(cleaned)
+                    except Exception:
+                        logger.error("Failed to parse failed_generation content")
+
                 return {"error": error_message}
         
     except Exception as e:
