@@ -79,6 +79,30 @@ class MessageResponse(BaseModel):
 
 
 # Dependency to get an agent by ID
+async def _load_delegations() -> Dict[str, Dict[str, Agent]]:
+    """Load delegation mappings from Redis and return agent objects."""
+    mappings = await redis_manager.delegation_store.get_all_domains()
+    delegations: Dict[str, Dict[str, Agent]] = {}
+
+    for domain, data in mappings.items():
+        delegate_id = data.get("agent_id")
+        if not delegate_id:
+            continue
+
+        if delegate_id not in agent_registry:
+            stored = await redis_manager.agent_store.get_agent(delegate_id)
+            if stored:
+                conf = AgentConfig(**stored["config"])
+                agent = Agent(conf, memory_manager=memory_manager, skill_client=skill_client)
+                await agent.initialize()
+                agent_registry[delegate_id] = agent
+
+        if delegate_id in agent_registry:
+            delegations[domain] = {"agent": agent_registry[delegate_id]}
+
+    return delegations
+
+
 async def get_agent(agent_id: str) -> Agent:
     """Get an agent by ID.
     
@@ -98,7 +122,15 @@ async def get_agent(agent_id: str) -> Agent:
 
     if agent_data:
         config = AgentConfig(**agent_data["config"])
-        loaded_agent = Agent(config=config, memory_manager=memory_manager, skill_client=skill_client)
+        delegations = None
+        if config.is_supervisor:
+            delegations = await _load_delegations()
+        loaded_agent = Agent(
+            config=config,
+            memory_manager=memory_manager,
+            skill_client=skill_client,
+            delegations=delegations,
+        )
         await loaded_agent.initialize()
         agent_registry[agent_id] = loaded_agent
         logger.info(f"Loaded agent {agent_id} from Redis into registry")
@@ -218,7 +250,25 @@ async def startup_event():
 
         logger.info("Created supervisor, finance, and general agents")
     else:
-        logger.info(f"Existing agents found: {existing_agents}. No default agents created")
+        logger.info(f"Existing agents found: {existing_agents}. Loading agents")
+        for agent_id in existing_agents:
+            data = await redis_manager.agent_store.get_agent(agent_id)
+            if not data:
+                continue
+            config = AgentConfig(**data["config"])
+            delegations = None
+            if config.is_supervisor:
+                delegations = await _load_delegations()
+            agent = Agent(
+                config,
+                memory_manager=memory_manager,
+                skill_client=skill_client,
+                delegations=delegations,
+            )
+            await agent.initialize()
+            agent_registry[agent_id] = agent
+
+        logger.info("Loaded existing agents into registry")
 
     logger.info("Agent Service started successfully")
 
