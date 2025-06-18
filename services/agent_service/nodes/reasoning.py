@@ -29,11 +29,18 @@ def _format_messages_for_llm(messages: List[Message]) -> List[Dict[str, str]]:
     Returns:
         List[Dict[str, str]]: Formatted messages for the LLM.
     """
-    return [
-        {"role": msg.role.value, "content": msg.content}
-        for msg in messages
-        if msg.role != MessageRole.SYSTEM  # System messages are handled separately
-    ]
+    formatted = []
+    for msg in messages:
+        if msg.role == MessageRole.SYSTEM:
+            # Skip system messages; added separately in call_llm
+            continue
+        role = msg.role.value
+        if role == "agent":
+            # OpenAI API expects "assistant" for agent messages
+            role = "assistant"
+        formatted.append({"role": role, "content": msg.content})
+
+    return formatted
 
 
 def _build_reasoning_prompt(
