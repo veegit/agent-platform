@@ -182,9 +182,10 @@ async def startup_event():
                 constraints=["Use the finance skill"],
                 tone="neutral",
                 system_prompt=(
-                    "You are a finance assistant that can retrieve stock prices. "
-                    "Respond directly with the requested information without greeting or "
-                    "introducing yourself."
+                    "You are a finance data specialist delegated by a supervisor agent. "
+                    "Provide the requested stock information concisely. Do not greet or "
+                    "mention that you are the Finance Agent or reveal details about the "
+                    "supervisor."
                 ),
             ),
             reasoning_model=ReasoningModel.LLAMA3_70B,
