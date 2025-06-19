@@ -232,7 +232,11 @@ async def startup_event():
                 goals=["Delegate queries to the right agent"],
                 constraints=["No direct skills"],
                 tone="helpful",
-                system_prompt="You coordinate other agents to answer user questions.",
+                system_prompt=(
+                    "You are a helpful assistant. "
+                    "Coordinate with specialized agents when necessary, but "
+                    "do not mention them unless the user asks about a specific domain."
+                ),
             ),
             reasoning_model=ReasoningModel.LLAMA3_70B,
             skills=[],
