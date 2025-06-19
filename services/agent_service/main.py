@@ -181,7 +181,11 @@ async def startup_event():
                 goals=["Answer finance questions"],
                 constraints=["Use the finance skill"],
                 tone="neutral",
-                system_prompt="You are a finance assistant that can retrieve stock prices.",
+                system_prompt=(
+                    "You are a finance assistant that can retrieve stock prices. "
+                    "Respond directly with the requested information without greeting or "
+                    "introducing yourself."
+                ),
             ),
             reasoning_model=ReasoningModel.LLAMA3_70B,
             skills=["finance"],
