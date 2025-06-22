@@ -79,9 +79,11 @@ class Agent(BaseModel):
 # Request models for API
 class CreateAgentRequest(BaseModel):
     """Request model for creating a new agent."""
-    
+
     config: AgentConfig = Field(..., description="Agent configuration")
     created_by: Optional[str] = Field(default=None, description="User who created the agent")
+    domain: Optional[str] = Field(default=None, description="Domain name for delegation")
+    keywords: List[str] = Field(default_factory=list, description="Example keywords for this domain")
 
 
 class UpdateAgentStatusRequest(BaseModel):
