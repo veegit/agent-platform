@@ -98,7 +98,10 @@ async def _load_delegations() -> Dict[str, Dict[str, Agent]]:
                 agent_registry[delegate_id] = agent
 
         if delegate_id in agent_registry:
-            delegations[domain] = {"agent": agent_registry[delegate_id]}
+            delegations[domain] = {
+                "agent": agent_registry[delegate_id],
+                "keywords": data.get("keywords", []),
+            }
 
     return delegations
 

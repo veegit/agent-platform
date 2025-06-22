@@ -58,7 +58,8 @@ class Agent:
         system_prompt = (
             "You are a supervisor agent deciding which domain expert should handle a user question. "
             f"Available domains: {domains}. "
-            "Return the best domain in a JSON object with a 'domain' field."
+            "Return the most relevant domain in JSON as {'domain': '<name>'}. "
+            "If none of the domains apply, respond with {'domain': 'general'}."
         )
 
         schema = {"type": "object", "properties": {"domain": {"type": "string"}}, "required": ["domain"]}
@@ -78,8 +79,14 @@ class Agent:
 
             if domain_raw:
                 # Allow responses like "finance agent" or "use the finance domain"
-                for registered_domain in self.delegations.keys():
+                for registered_domain, info in self.delegations.items():
                     if registered_domain in domain_raw:
+                        keywords = [k.lower() for k in info.get("keywords", [])]
+                        if keywords and not any(k in user_message.lower() for k in keywords):
+                            logger.info(
+                                f"LLM suggested {registered_domain} but message lacks keywords"
+                            )
+                            continue
                         logger.info(
                             f"LLM suggested domain '{domain_raw}', matched '{registered_domain}'"
                         )
