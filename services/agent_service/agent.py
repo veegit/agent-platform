@@ -71,6 +71,8 @@ class Agent:
                 system_prompt=system_prompt,
                 output_schema=schema,
             )
+
+            logger.info(f"Calling LLM with user_message='{user_message}', system_prompt='{system_prompt}' and it returned: {result}")
             domain_raw = (
                 result.get("domain")
                 or result.get("content")
