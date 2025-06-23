@@ -534,6 +534,17 @@ IMPORTANT JSON FORMATTING INSTRUCTIONS:
                 skill_to_use = None
             state.current_skill = None
         
+        # Update current_skill based on the reasoning outcome
+        if skill_to_use and not should_respond_directly:
+            state.current_skill = SkillExecution(
+                skill_id=skill_to_use.skill_id,
+                parameters=skill_to_use.parameters,
+                agent_id=state.agent_id,
+                conversation_id=state.conversation_id,
+            )
+        else:
+            state.current_skill = None
+
         # Update the agent state
         state.thought_process.append(thoughts)
         state.current_node = "reasoning"
