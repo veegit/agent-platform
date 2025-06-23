@@ -88,7 +88,6 @@ class Agent:
                             logger.info(
                                 f"LLM suggested {registered_domain} but message lacks keywords"
                             )
-                            continue
                         logger.info(
                             f"LLM suggested domain '{domain_raw}', matched '{registered_domain}'"
                         )
@@ -125,6 +124,8 @@ class Agent:
         # Generate conversation ID if not provided
         conversation_id = conversation_id or str(uuid.uuid4())
 
+        logger.info(f"is_supervisor:{self.config.is_supervisor}, delegations:{self.delegations}, conversation_id:{conversation_id}, conversation_delegates: {self.conversation_delegates}")
+        
         # If this agent is a supervisor, choose or reuse a delegated agent
         if self.config.is_supervisor and self.delegations:
             matched_agent: Optional[Agent] = None
