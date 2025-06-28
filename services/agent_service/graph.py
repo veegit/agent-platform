@@ -61,8 +61,15 @@ async def reasoning_node_wrapper(
     # Convert dict to AgentState
     agent_state = AgentState(**state)
     
-    # Get available skills
-    available_skills = await skill_client.get_available_skills()
+    # Get skills available to this agent only
+    available_skills = []
+    for skill_id in config.skills:
+        try:
+            skill = await skill_client.get_skill(skill_id)
+            if skill:
+                available_skills.append(skill)
+        except Exception as e:
+            logger.error(f"Failed to load skill {skill_id}: {e}")
     
     # Execute reasoning
     result = await reasoning_node(agent_state, config, available_skills)

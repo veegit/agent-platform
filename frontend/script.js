@@ -23,7 +23,9 @@ fetch(CONFIG.LIFECYCLE_URL + '/agents')
       const opt = document.createElement('option');
       opt.value = agent.agent_id;
       opt.textContent = agent.config.persona.name;
-      agentSelect.appendChild(opt);
+      if (agent.status === 'active') {
+        agentSelect.appendChild(opt);
+      }
     });
   })
   .catch(err => console.error('Failed to load agents', err));

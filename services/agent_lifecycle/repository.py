@@ -42,7 +42,12 @@ class AgentRepository:
         self.agent_store = self.redis_manager.agents
         logger.info("Agent repository initialized")
     
-    async def create_agent(self, agent: Agent) -> str:
+    async def create_agent(
+        self,
+        agent: Agent,
+        domain: Optional[str] = None,
+        keywords: Optional[List[str]] = None,
+    ) -> str:
         """Create a new agent.
         
         Args:
@@ -87,8 +92,26 @@ class AgentRepository:
             agent.updated_at = datetime.now()
             
             # Store the full agent data
-            await self.redis_manager.redis_client.set_value(agent_key, json.dumps(agent.dict(), cls=DateTimeEncoder))
-            
+            await self.redis_manager.redis_client.set_value(
+                agent_key,
+                json.dumps(agent.dict(), cls=DateTimeEncoder),
+            )
+
+            # Register delegation domain if provided and applicable
+            if domain and not agent.config.is_supervisor and agent.agent_id != "default-agent":
+                try:
+                    await self.redis_manager.delegation_store.register_domain(
+                        domain,
+                        agent.agent_id,
+                        keywords or [],
+                        agent.config.skills,
+                    )
+                    logger.info(
+                        f"Registered domain {domain} for agent {agent.agent_id}"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to register domain {domain}: {e}")
+
             logger.info(f"Created agent {agent.agent_id}")
             return agent.agent_id
             
@@ -143,7 +166,8 @@ class AgentRepository:
             llm=LLMConfig(
                 model_name="llama3-70b-8192"
             ),
-            skills=skills or []
+            skills=skills or [],
+            is_supervisor=False
         )
         
     async def get_agent(self, agent_id: str) -> Optional[Agent]:

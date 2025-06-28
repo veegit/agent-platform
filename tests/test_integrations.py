@@ -2,6 +2,7 @@ import sys
 import types
 import asyncio
 import importlib
+import json
 from tests.helpers import FakeRedis
 
 # Stub httpx
@@ -52,9 +53,10 @@ from services.agent_service import llm
 from services.skill_service.skills import web_search
 
 class MockResponse:
-    def __init__(self, data):
-        self.status_code = 200
+    def __init__(self, data, status_code=200):
+        self.status_code = status_code
         self._data = data
+        self.text = json.dumps(data)
     def json(self):
         return self._data
 
@@ -68,3 +70,28 @@ def test_llm_call(monkeypatch):
 def test_web_search(monkeypatch):
     result = asyncio.run(web_search.execute({"query": "python", "num_results": 1}))
     assert result["results"][0]["title"] == "Test"
+
+
+def test_llm_parse_failed_generation(monkeypatch):
+    class FailClient:
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+        async def post(self, *a, **k):
+            return MockResponse(
+                {
+                    "error": {
+                        "message": "json failed",
+                        "failed_generation": '{"foo": 1, "bar": 2}'
+                    }
+                },
+                status_code=400,
+            )
+
+    monkeypatch.setattr(llm.httpx, "AsyncClient", FailClient)
+
+    result = asyncio.run(
+        llm.call_llm([{"role": "user", "content": "test"}], output_schema={})
+    )
+    assert result == {"foo": 1, "bar": 2}

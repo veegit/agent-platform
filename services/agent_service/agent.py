@@ -17,6 +17,7 @@ from services.agent_service.models.config import AgentConfig
 from services.agent_service.memory import MemoryManager
 from services.agent_service.skill_client import SkillServiceClient
 from services.agent_service.graph import create_agent_graph, process_reasoning_output
+from services.agent_service.llm import call_llm
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,8 @@ class Agent:
         self,
         config: AgentConfig,
         memory_manager: Optional[MemoryManager] = None,
-        skill_client: Optional[SkillServiceClient] = None
+        skill_client: Optional[SkillServiceClient] = None,
+        delegations: Optional[Dict[str, Dict[str, Any]]] = None,
     ):
         """Initialize the agent.
         
@@ -41,8 +43,46 @@ class Agent:
         self.memory_manager = memory_manager or MemoryManager()
         self.skill_client = skill_client or SkillServiceClient()
         self.graph = create_agent_graph(config, skill_client)
-        
+        self.delegations = delegations or {}
+        # Track which delegate is handling each conversation
+        self.conversation_delegates: Dict[str, Agent] = {}
+
         logger.info(f"Initialized agent {config.agent_id} with name '{config.persona.name}'")
+
+    async def _determine_domain(self, user_message: str) -> Optional[str]:
+        """Use the reasoning model to choose a delegation domain."""
+        if not self.delegations:
+            return None
+
+        domains = ", ".join(self.delegations.keys())
+        system_prompt = (
+            "You are a supervisor agent deciding which domain expert should handle a user question. "
+            f"Available domains: {domains}. "
+            "Return the most relevant domain in JSON as {'domain': '<name>'}. "
+            "If none of the domains apply, respond with {'domain': 'general'}."
+        )
+
+        schema = {"type": "object", "properties": {"domain": {"type": "string"}}, "required": ["domain"]}
+
+        try:
+            result = await call_llm(
+                [{"role": "user", "content": user_message}],
+                model=self.config.reasoning_model,
+                system_prompt=system_prompt,
+                output_schema=schema,
+            )
+
+            logger.info(f"Calling LLM with user_message='{user_message}', system_prompt='{system_prompt}' and it returned: {result}")
+            domain = result.get("domain")
+            if domain and domain in self.delegations:
+                logger.info(f"LLM suggested domain '{domain}'")
+                return domain
+            elif domain:
+                logger.info(f"LLM suggested unknown domain '{domain}'")
+        except Exception as e:
+            logger.error(f"Failed to determine domain via LLM: {e}")
+
+        return None
     
     async def initialize(self) -> None:
         """Initialize the agent's dependencies."""
@@ -66,9 +106,40 @@ class Agent:
             AgentOutput: The agent's output.
         """
         logger.info(f"Processing message for agent {self.config.agent_id}")
-        
+
         # Generate conversation ID if not provided
         conversation_id = conversation_id or str(uuid.uuid4())
+
+        logger.info(f"is_supervisor:{self.config.is_supervisor}, delegations:{self.delegations}, conversation_id:{conversation_id}, conversation_delegates: {self.conversation_delegates}")
+        
+        # If this agent is a supervisor, choose or reuse a delegated agent
+        if self.config.is_supervisor and self.delegations:
+            matched_agent: Optional[Agent] = None
+
+            domain = await self._determine_domain(user_message)
+            if domain and domain in self.delegations:
+                candidate = self.delegations[domain].get("agent")
+                if candidate and candidate.config.skills:
+                    matched_agent = candidate
+                    logger.info(
+                        f"Delegating message about {domain} to {candidate.config.agent_id}"
+                    )
+                else:
+                    logger.info(
+                        f"Agent for domain {domain} unavailable or lacks skills, falling back"
+                    )
+
+            if not matched_agent and "general" in self.delegations:
+                matched_agent = self.delegations["general"].get("agent")
+                if matched_agent:
+                    logger.info(
+                        f"Delegating message to general agent {matched_agent.config.agent_id}"
+                    )
+
+            if matched_agent:
+                # Store delegate for future turns
+                self.conversation_delegates[conversation_id] = matched_agent
+                return await matched_agent.process_message(user_message, user_id, conversation_id)
         
         # Try to load existing state or create a new one
         state = await self.memory_manager.load_agent_state(self.config.agent_id, conversation_id)

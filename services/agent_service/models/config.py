@@ -38,14 +38,15 @@ class AgentPersona(BaseModel):
 
 class AgentConfig(BaseModel):
     """Configuration for an agent."""
-    
+
     agent_id: str = Field(..., description="Unique identifier for the agent")
     persona: AgentPersona = Field(..., description="Agent's persona")
     reasoning_model: ReasoningModel = Field(default=ReasoningModel.LLAMA3_70B, description="LLM model for reasoning")
     skills: List[str] = Field(default_factory=list, description="Skills available to the agent")
     memory: MemoryConfig = Field(default_factory=MemoryConfig, description="Configuration for agent memory")
+    is_supervisor: bool = Field(default=False, description="Whether this agent acts as a Supervisor")
     default_skill_params: Dict[str, Dict[str, Any]] = Field(
-        default_factory=dict, 
+        default_factory=dict,
         description="Default parameters for skills, keyed by skill_id"
     )
     additional_config: Dict[str, Any] = Field(default_factory=dict, description="Additional configuration options")
@@ -76,6 +77,7 @@ class AgentConfig(BaseModel):
                     "web-search": {
                         "num_results": 5
                     }
-                }
+                },
+                "is_supervisor": False
             }
         }

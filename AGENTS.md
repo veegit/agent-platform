@@ -135,12 +135,13 @@ The platform provides a RESTful API for managing agents, conversations, and skil
 
 ## Example Usage
 
-### Create an Agent
+### Create Agents
+#### Create Supervisor Agent
 
 ```bash
 curl -X POST http://localhost:8001/agents -H "Content-Type: application/json" -d '{
   "config": {
-    "agent_id": "",
+    "agent_id": "supervisor_agent",
     "persona": {
       "name": "Supervisor Agent",
       "description": "Coordinates specialized agents to assist with complex queries",
@@ -160,9 +161,80 @@ curl -X POST http://localhost:8001/agents -H "Content-Type: application/json" -d
       "summarize_after": 20,
       "long_term_memory_enabled": true,
       "key_fact_extraction_enabled": true
-    }
+    },
+    "is_supervisor": true
   }
 }'
+```
+
+#### Create Research Agent
+```bash
+curl -X POST http://localhost:8001/agents \
+  -H "Content-Type: application/json" \
+  -d '{
+        "config": {
+          "agent_id": "research-agent",
+          "persona": {
+            "name": "Research Agent",
+            "description": "Helps with research and summarizing information",
+            "goals": ["Provide thorough answers", "Find relevant sources"],
+            "constraints": ["Avoid speculation"],
+            "tone": "informative",
+            "system_prompt": "You are an expert research assistant."
+          },
+          "llm": {
+            "model_name": "llama3-70b-8192",
+            "temperature": 0.7,
+            "max_tokens": 2000
+          },
+          "skills": ["ask-follow-up", "summarize-text", "web-search"],
+          "memory": {
+            "max_messages": 50,
+            "summarize_after": 20,
+            "long_term_memory_enabled": true,
+            "key_fact_extraction_enabled": true
+          },
+          "is_supervisor": false
+        },
+        "created_by": "admin",
+        "domain": "research",
+        "keywords": ["research", "analysis", "sources"]
+      }'
+```
+
+#### Create Finance Agent
+```bash
+curl -X POST http://localhost:8001/agents \
+  -H "Content-Type: application/json" \
+  -d '{
+        "config": {
+          "agent_id": "finance-agent",
+          "persona": {
+            "name": "Finance Agent",
+            "description": "Provides stock prices and market updates",
+            "goals": ["Fetch real-time market data"],
+            "constraints": ["No investment advice"],
+            "tone": "professional",
+            "system_prompt": "You specialize in financial data and stock information."
+          },
+          "llm": {
+            "model_name": "llama3-70b-8192",
+            "temperature": 0.7,
+            "max_tokens": 2000
+          },
+          "skills": ["finance"],
+          "memory": {
+            "max_messages": 50,
+            "summarize_after": 20,
+            "long_term_memory_enabled": true,
+            "key_fact_extraction_enabled": true
+          },
+          "is_supervisor": false
+        },
+        "created_by": "admin",
+        "domain": "finance",
+        "keywords": ["stocks", "market", "investment"]
+      }'
 ```
 
 ### Activate an Agent
@@ -222,19 +294,19 @@ The platform comes with several built-in skills:
 
 3. **Ask Follow-up Questions** (`ask-follow-up`): Generate follow-up questions based on context
    - Parameters: `context`, `num_questions`
+
 4. **Finance Skill** (`finance`): Get the latest stock price using Alpha Vantage
    - Parameters: `symbol`
 
 ### Adding Domain Agents
 
 Supervisor agents delegate tasks using LLM reasoning over domain mappings stored in
-Redis. Each domain mapping may also specify example keywords used to validate the
-LLM's suggested domain. The Supervisor itself has no skills and instead uses its
-reasoning model to select an agent such as the Default Agent or Finance Agent. To
-add a new specialized agent (e.g., Bluesky or Foursquare), register its domain,
-keywords, and agent ID in Redis and the Supervisor will route matching queries
-based on the reasoning output. If the selected agent lacks the required skills or
-cannot answer, the Supervisor falls back to a general agent.
+Redis. The Supervisor itself has no skills and instead uses its reasoning model to
+select an agent such as the Demo Agent or Finance Agent. To add a new specialized
+agent (e.g., Bluesky or Foursquare), register its domain and agent ID in Redis and
+the Supervisor will route matching queries based on the reasoning output. If the
+selected agent lacks the required skills or cannot answer, the Supervisor falls
+back to a general agent.
 
 ## Service Ports
 

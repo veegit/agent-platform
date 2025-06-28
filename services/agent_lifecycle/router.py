@@ -73,8 +73,12 @@ async def create_agent(
             created_by=request.created_by
         )
         
-        # Store the agent
-        await repository.create_agent(agent)
+        # Store the agent and register domain if provided
+        await repository.create_agent(
+            agent,
+            domain=request.domain,
+            keywords=request.keywords,
+        )
         
         # Return the agent
         return AgentResponse(

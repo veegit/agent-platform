@@ -79,6 +79,33 @@ class MessageResponse(BaseModel):
 
 
 # Dependency to get an agent by ID
+async def _load_delegations() -> Dict[str, Dict[str, Agent]]:
+    """Load delegation mappings from Redis and return agent objects."""
+    mappings = await redis_manager.delegation_store.get_all_domains()
+    delegations: Dict[str, Dict[str, Agent]] = {}
+
+    for domain, data in mappings.items():
+        delegate_id = data.get("agent_id")
+        if not delegate_id:
+            continue
+
+        if delegate_id not in agent_registry:
+            stored = await redis_manager.agent_store.get_agent(delegate_id)
+            if stored:
+                conf = AgentConfig(**stored["config"])
+                agent = Agent(conf, memory_manager=memory_manager, skill_client=skill_client)
+                await agent.initialize()
+                agent_registry[delegate_id] = agent
+
+        if delegate_id in agent_registry:
+            delegations[domain] = {
+                "agent": agent_registry[delegate_id],
+                "keywords": data.get("keywords", []),
+            }
+
+    return delegations
+
+
 async def get_agent(agent_id: str) -> Agent:
     """Get an agent by ID.
     
@@ -98,18 +125,27 @@ async def get_agent(agent_id: str) -> Agent:
 
     if agent_data:
         config = AgentConfig(**agent_data["config"])
-        loaded_agent = Agent(config=config, memory_manager=memory_manager, skill_client=skill_client)
+        delegations = None
+        if config.is_supervisor:
+            delegations = await _load_delegations()
+        loaded_agent = Agent(
+            config=config,
+            memory_manager=memory_manager,
+            skill_client=skill_client,
+            delegations=delegations,
+        )
         await loaded_agent.initialize()
         agent_registry[agent_id] = loaded_agent
         logger.info(f"Loaded agent {agent_id} from Redis into registry")
         return loaded_agent
 
     
-    # In a real implementation, we would load the agent configuration from Redis or a database
-    # For now, use the demo agent as a fallback for any ID
-    if "demo-agent" in agent_registry:
-        logger.warning(f"Agent {agent_id} not found, using demo-agent as fallback")
-        return agent_registry["demo-agent"]
+    # Use the default agent as a fallback if available
+    if "default-agent" in agent_registry:
+        logger.warning(
+            f"Agent {agent_id} not found, using default-agent as fallback"
+        )
+        return agent_registry["default-agent"]
     
     # If no agent found and no demo agent, return 404
     raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
@@ -127,53 +163,96 @@ async def startup_event():
     # Initialize memory manager
     await memory_manager.initialize()
     
-    # Create a demo agent
-    demo_agent_id = "demo-agent"
-    
-    # Get available skills from skill service
+    # Get available skills from the skill service
     try:
         available_skills = await skill_client.get_available_skills()
         skill_ids = [skill["skill_id"] for skill in available_skills]
         logger.info(f"Found {len(skill_ids)} available skills: {skill_ids}")
     except Exception as e:
         logger.error(f"Failed to get available skills: {e}")
-        skill_ids = ["web-search", "summarize-text", "ask-follow-up"]
-    
-    # Create demo agent config
-    demo_config = AgentConfig(
-        agent_id=demo_agent_id,
-        persona=AgentPersona(
-            name="Research Assistant",
-            description="A helpful research assistant that can search the web and summarize information.",
-            goals=["Provide accurate information", "Assist with research tasks"],
-            constraints=["Do not make up facts", "Cite sources when possible"],
-            tone="professional and helpful",
-            system_prompt="You are a research assistant that helps users find and understand information. Always strive to provide factual, accurate responses and assist the user with their research needs."
-        ),
-        reasoning_model=ReasoningModel.LLAMA3_70B,
-        skills=skill_ids,
-        memory=MemoryConfig(
-            max_messages=50,
-            summarize_after=20,
-            long_term_memory_enabled=True,
-            key_fact_extraction_enabled=True
+        skill_ids = ["web-search", "summarize-text", "ask-follow-up", "finance"]
+
+    existing_agents = await redis_manager.agent_store.list_agents()
+
+    if not existing_agents:
+        # ----- Create Default General Agent -----
+        default_agent_id = "default-agent"
+        general_skill_ids = skill_ids
+
+        default_config = AgentConfig(
+            agent_id=default_agent_id,
+            persona=AgentPersona(
+                name="General Agent",
+                description="Handles general questions",
+                goals=["Assist with everyday queries"],
+                constraints=["Be concise"],
+                tone="helpful",
+                system_prompt="You are a helpful general assistant.",
+            ),
+            reasoning_model=ReasoningModel.LLAMA3_70B,
+            skills=general_skill_ids,
+            memory=MemoryConfig(),
+            is_supervisor=False,
         )
-    )
-    
-    # Create demo agent
-    demo_agent = Agent(
-        config=demo_config,
-        memory_manager=memory_manager,
-        skill_client=skill_client
-    )
-    
-    # Initialize agent
-    await demo_agent.initialize()
-    
-    # Add to registry
-    agent_registry[demo_agent_id] = demo_agent
-    
-    logger.info(f"Created demo agent {demo_agent_id}")
+
+        general_agent = Agent(default_config, memory_manager=memory_manager, skill_client=skill_client)
+        await general_agent.initialize()
+        agent_registry[default_agent_id] = general_agent
+        await redis_manager.delegation_store.register_domain("general", "default-agent", ["general"], general_skill_ids)
+
+        # ----- Create Supervisor Agent -----
+        supervisor_config = AgentConfig(
+            agent_id="supervisor-agent",
+            persona=AgentPersona(
+                name="Supervisor Agent",
+                description="Coordinates specialized agents",
+                goals=["Delegate queries to the right agent"],
+                constraints=["No direct skills"],
+                tone="helpful",
+                system_prompt=(
+                    "You are a helpful assistant. "
+                    "Coordinate with specialized agents when necessary, but "
+                    "do not mention them unless the user asks about a specific domain."
+                ),
+            ),
+            reasoning_model=ReasoningModel.LLAMA3_70B,
+            skills=[],
+            memory=MemoryConfig(),
+            is_supervisor=True,
+        )
+
+        delegations = await _load_delegations()
+        supervisor_agent = Agent(
+            supervisor_config,
+            memory_manager=memory_manager,
+            skill_client=skill_client,
+            delegations=delegations,
+        )
+        await supervisor_agent.initialize()
+        agent_registry["supervisor-agent"] = supervisor_agent
+
+        logger.info("Created supervisor and general agents")
+    else:
+        logger.info(f"Existing agents found: {existing_agents}. Loading agents")
+        for agent_id in existing_agents:
+            data = await redis_manager.agent_store.get_agent(agent_id)
+            if not data:
+                continue
+            config = AgentConfig(**data["config"])
+            delegations = None
+            if config.is_supervisor:
+                delegations = await _load_delegations()
+            agent = Agent(
+                config,
+                memory_manager=memory_manager,
+                skill_client=skill_client,
+                delegations=delegations,
+            )
+            await agent.initialize()
+            agent_registry[agent_id] = agent
+
+        logger.info("Loaded existing agents into registry")
+
     logger.info("Agent Service started successfully")
 
 
