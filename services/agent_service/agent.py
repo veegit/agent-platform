@@ -31,6 +31,9 @@ class Agent:
         memory_manager: Optional[MemoryManager] = None,
         skill_client: Optional[SkillServiceClient] = None,
         delegations: Optional[Dict[str, Dict[str, Any]]] = None,
+        delegation_loader: Optional[
+            callable
+        ] = None,
     ):
         """Initialize the agent.
         
@@ -44,8 +47,7 @@ class Agent:
         self.skill_client = skill_client or SkillServiceClient()
         self.graph = create_agent_graph(config, skill_client)
         self.delegations = delegations or {}
-        # Track which delegate is handling each conversation
-        self.conversation_delegates: Dict[str, Agent] = {}
+        self.delegation_loader = delegation_loader
 
         logger.info(f"Initialized agent {config.agent_id} with name '{config.persona.name}'")
 
@@ -123,8 +125,13 @@ class Agent:
         # Generate conversation ID if not provided
         conversation_id = conversation_id or str(uuid.uuid4())
 
-        # If this agent is a supervisor, choose a delegate for this turn
-        if self.config.is_supervisor and self.delegations:
+        # If this agent is a supervisor, refresh delegations and choose a delegate for this turn
+        if self.config.is_supervisor and self.delegations is not None:
+            if self.delegation_loader:
+                try:
+                    self.delegations = await self.delegation_loader()
+                except Exception as e:
+                    logger.error(f"Failed to refresh delegations: {e}")
             matched_agent: Optional[Agent] = None
 
             # Determine the best domain for the incoming message
@@ -149,9 +156,11 @@ class Agent:
                     )
 
             if matched_agent:
-                # Store the delegate used for this turn
-                self.conversation_delegates[conversation_id] = matched_agent
-                return await matched_agent.process_message(user_message, user_id, conversation_id)
+                return await matched_agent.process_message(
+                    user_message,
+                    user_id,
+                    conversation_id,
+                )
         
         # Try to load existing state or create a new one
         state = await self.memory_manager.load_agent_state(self.config.agent_id, conversation_id)

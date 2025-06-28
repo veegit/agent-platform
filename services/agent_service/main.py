@@ -133,6 +133,7 @@ async def get_agent(agent_id: str) -> Agent:
             memory_manager=memory_manager,
             skill_client=skill_client,
             delegations=delegations,
+            delegation_loader=_load_delegations if config.is_supervisor else None,
         )
         await loaded_agent.initialize()
         agent_registry[agent_id] = loaded_agent
@@ -227,6 +228,7 @@ async def startup_event():
             memory_manager=memory_manager,
             skill_client=skill_client,
             delegations=delegations,
+            delegation_loader=_load_delegations,
         )
         await supervisor_agent.initialize()
         agent_registry["supervisor-agent"] = supervisor_agent
@@ -247,6 +249,7 @@ async def startup_event():
                 memory_manager=memory_manager,
                 skill_client=skill_client,
                 delegations=delegations,
+                delegation_loader=_load_delegations if config.is_supervisor else None,
             )
             await agent.initialize()
             agent_registry[agent_id] = agent
