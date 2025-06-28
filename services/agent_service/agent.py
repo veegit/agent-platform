@@ -123,39 +123,34 @@ class Agent:
         # Generate conversation ID if not provided
         conversation_id = conversation_id or str(uuid.uuid4())
 
-        # If this agent is a supervisor, choose or reuse a delegated agent
+        # If this agent is a supervisor, choose a delegate for this turn
         if self.config.is_supervisor and self.delegations:
             matched_agent: Optional[Agent] = None
 
-            # Reuse delegate if this conversation already has one
-            if conversation_id in self.conversation_delegates:
-                matched_agent = self.conversation_delegates[conversation_id]
-            else:
-                domain = await self._determine_domain(user_message)
-                if domain and domain in self.delegations:
-                    candidate = self.delegations[domain].get("agent")
-                    if candidate and candidate.config.skills:
-                        matched_agent = candidate
-                        logger.info(
-                            f"Delegating message about {domain} to {candidate.config.agent_id}"
-                        )
-                    else:
-                        logger.info(
-                            f"Agent for domain {domain} unavailable or lacks skills, falling back"
-                        )
+            # Determine the best domain for the incoming message
+            domain = await self._determine_domain(user_message)
+            if domain and domain in self.delegations:
+                candidate = self.delegations[domain].get("agent")
+                if candidate and candidate.config.skills:
+                    matched_agent = candidate
+                    logger.info(
+                        f"Delegating message about {domain} to {candidate.config.agent_id}"
+                    )
+                else:
+                    logger.info(
+                        f"Agent for domain {domain} unavailable or lacks skills, falling back"
+                    )
 
-                if not matched_agent and "general" in self.delegations:
-                    matched_agent = self.delegations["general"].get("agent")
-                    if matched_agent:
-                        logger.info(
-                            f"Delegating message to general agent {matched_agent.config.agent_id}"
-                        )
-
+            if not matched_agent and "general" in self.delegations:
+                matched_agent = self.delegations["general"].get("agent")
                 if matched_agent:
-                    # Store delegate for future turns
-                    self.conversation_delegates[conversation_id] = matched_agent
+                    logger.info(
+                        f"Delegating message to general agent {matched_agent.config.agent_id}"
+                    )
 
             if matched_agent:
+                # Store the delegate used for this turn
+                self.conversation_delegates[conversation_id] = matched_agent
                 return await matched_agent.process_message(user_message, user_id, conversation_id)
         
         # Try to load existing state or create a new one
