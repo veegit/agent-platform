@@ -29,7 +29,9 @@ async def create_agent():
                 "key_fact_extraction_enabled": True
             }
         },
-        "created_by": "test_user"
+        "created_by": "test_user",
+        "domain": "test",
+        "keywords": ["test"]
     }
     
     async with httpx.AsyncClient() as client:
