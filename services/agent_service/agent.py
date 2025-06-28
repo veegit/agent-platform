@@ -73,26 +73,12 @@ class Agent:
             )
 
             logger.info(f"Calling LLM with user_message='{user_message}', system_prompt='{system_prompt}' and it returned: {result}")
-            domain_raw = (
-                result.get("domain")
-                or result.get("content")
-                or ""
-            ).strip().lower()
-
-            if domain_raw:
-                # Allow responses like "finance agent" or "use the finance domain"
-                for registered_domain, info in self.delegations.items():
-                    if registered_domain in domain_raw:
-                        keywords = [k.lower() for k in info.get("keywords", [])]
-                        if keywords and not any(k in user_message.lower() for k in keywords):
-                            logger.info(
-                                f"LLM suggested {registered_domain} but message lacks keywords"
-                            )
-                        logger.info(
-                            f"LLM suggested domain '{domain_raw}', matched '{registered_domain}'"
-                        )
-                        return registered_domain
-                logger.info(f"LLM suggested unknown domain '{domain_raw}'")
+            domain = result.get("domain")
+            if domain and domain in self.delegations:
+                logger.info(f"LLM suggested domain '{domain}'")
+                return domain
+            elif domain:
+                logger.info(f"LLM suggested unknown domain '{domain}'")
         except Exception as e:
             logger.error(f"Failed to determine domain via LLM: {e}")
 
@@ -130,35 +116,29 @@ class Agent:
         if self.config.is_supervisor and self.delegations:
             matched_agent: Optional[Agent] = None
 
-            # Reuse delegate if this conversation already has one
-            if conversation_id in self.conversation_delegates:
-                matched_agent = self.conversation_delegates[conversation_id]
-            else:
-                domain = await self._determine_domain(user_message)
-                if domain and domain in self.delegations:
-                    candidate = self.delegations[domain].get("agent")
-                    if candidate and candidate.config.skills:
-                        matched_agent = candidate
-                        logger.info(
-                            f"Delegating message about {domain} to {candidate.config.agent_id}"
-                        )
-                    else:
-                        logger.info(
-                            f"Agent for domain {domain} unavailable or lacks skills, falling back"
-                        )
+            domain = await self._determine_domain(user_message)
+            if domain and domain in self.delegations:
+                candidate = self.delegations[domain].get("agent")
+                if candidate and candidate.config.skills:
+                    matched_agent = candidate
+                    logger.info(
+                        f"Delegating message about {domain} to {candidate.config.agent_id}"
+                    )
+                else:
+                    logger.info(
+                        f"Agent for domain {domain} unavailable or lacks skills, falling back"
+                    )
 
-                if not matched_agent and "general" in self.delegations:
-                    matched_agent = self.delegations["general"].get("agent")
-                    if matched_agent:
-                        logger.info(
-                            f"Delegating message to general agent {matched_agent.config.agent_id}"
-                        )
-
+            if not matched_agent and "general" in self.delegations:
+                matched_agent = self.delegations["general"].get("agent")
                 if matched_agent:
-                    # Store delegate for future turns
-                    self.conversation_delegates[conversation_id] = matched_agent
+                    logger.info(
+                        f"Delegating message to general agent {matched_agent.config.agent_id}"
+                    )
 
             if matched_agent:
+                # Store delegate for future turns
+                self.conversation_delegates[conversation_id] = matched_agent
                 return await matched_agent.process_message(user_message, user_id, conversation_id)
         
         # Try to load existing state or create a new one
