@@ -133,6 +133,7 @@ async def get_agent(agent_id: str) -> Agent:
             memory_manager=memory_manager,
             skill_client=skill_client,
             delegations=delegations,
+            delegation_loader=_load_delegations if config.is_supervisor else None,
         )
         await loaded_agent.initialize()
         agent_registry[agent_id] = loaded_agent
@@ -175,36 +176,9 @@ async def startup_event():
     existing_agents = await redis_manager.agent_store.list_agents()
 
     if not existing_agents:
-        # ----- Create Finance Agent -----
-        finance_config = AgentConfig(
-            agent_id="finance-agent",
-            persona=AgentPersona(
-                name="Finance Agent",
-                description="Provides stock information",
-                goals=["Answer finance questions"],
-                constraints=["Use the finance skill"],
-                tone="neutral",
-                system_prompt=(
-                    "You are a finance data specialist delegated by a supervisor agent. "
-                    "Provide the requested stock information concisely. Do not greet or "
-                    "mention that you are the Finance Agent or reveal details about the "
-                    "supervisor."
-                ),
-            ),
-            reasoning_model=ReasoningModel.LLAMA3_70B,
-            skills=["finance"],
-            memory=MemoryConfig(),
-            is_supervisor=False,
-        )
-
-        finance_agent = Agent(finance_config, memory_manager=memory_manager, skill_client=skill_client)
-        await finance_agent.initialize()
-        agent_registry["finance-agent"] = finance_agent
-        await redis_manager.delegation_store.register_domain("finance", "finance-agent", ["stock", "share", "ticker"], ["finance"])
-
         # ----- Create Default General Agent -----
         default_agent_id = "default-agent"
-        general_skill_ids = [s for s in skill_ids if s != "finance"]
+        general_skill_ids = skill_ids
 
         default_config = AgentConfig(
             agent_id=default_agent_id,
@@ -248,19 +222,18 @@ async def startup_event():
             is_supervisor=True,
         )
 
+        delegations = await _load_delegations()
         supervisor_agent = Agent(
             supervisor_config,
             memory_manager=memory_manager,
             skill_client=skill_client,
-            delegations={
-                "finance": {"agent": finance_agent},
-                "general": {"agent": general_agent},
-            },
+            delegations=delegations,
+            delegation_loader=_load_delegations,
         )
         await supervisor_agent.initialize()
         agent_registry["supervisor-agent"] = supervisor_agent
 
-        logger.info("Created supervisor, finance, and general agents")
+        logger.info("Created supervisor and general agents")
     else:
         logger.info(f"Existing agents found: {existing_agents}. Loading agents")
         for agent_id in existing_agents:
@@ -276,6 +249,7 @@ async def startup_event():
                 memory_manager=memory_manager,
                 skill_client=skill_client,
                 delegations=delegations,
+                delegation_loader=_load_delegations if config.is_supervisor else None,
             )
             await agent.initialize()
             agent_registry[agent_id] = agent
