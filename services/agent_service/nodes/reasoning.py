@@ -29,11 +29,18 @@ def _format_messages_for_llm(messages: List[Message]) -> List[Dict[str, str]]:
     Returns:
         List[Dict[str, str]]: Formatted messages for the LLM.
     """
-    return [
-        {"role": msg.role.value, "content": msg.content}
-        for msg in messages
-        if msg.role != MessageRole.SYSTEM  # System messages are handled separately
-    ]
+    formatted = []
+    for msg in messages:
+        if msg.role == MessageRole.SYSTEM:
+            # Skip system messages; added separately in call_llm
+            continue
+        role = msg.role.value
+        if role == "agent":
+            # OpenAI API expects "assistant" for agent messages
+            role = "assistant"
+        formatted.append({"role": role, "content": msg.content})
+
+    return formatted
 
 
 def _build_reasoning_prompt(
@@ -352,15 +359,20 @@ IMPORTANT JSON FORMATTING INSTRUCTIONS:
         skill_id = llm_response.get("skill_id")
         skill_parameters = llm_response.get("skill_parameters", {})
         skill_reason = llm_response.get("skill_reason", "")
-        
         # Build skill_to_use_data from the flattened properties
-        skill_to_use_data = None
+        skill_to_use_data: Optional[Dict[str, Any]] = None
+        skill_to_use: Optional[SkillChoice] = None
         if skill_id and not should_respond_directly:
             skill_to_use_data = {
                 "skill_id": skill_id,
                 "parameters": skill_parameters or {},
                 "reason": skill_reason or "This skill is appropriate for the user's request."
             }
+            skill_to_use = SkillChoice(
+                skill_id=skill_id,
+                parameters=skill_parameters or {},
+                reason=skill_reason or "This skill is appropriate for the user's request."
+            )
         
         # Override decision for news queries if web search is available
         if should_use_web_search and web_search_available:
@@ -522,6 +534,17 @@ IMPORTANT JSON FORMATTING INSTRUCTIONS:
                 skill_to_use = None
             state.current_skill = None
         
+        # Update current_skill based on the reasoning outcome
+        if skill_to_use and not should_respond_directly:
+            state.current_skill = SkillExecution(
+                skill_id=skill_to_use.skill_id,
+                parameters=skill_to_use.parameters,
+                agent_id=state.agent_id,
+                conversation_id=state.conversation_id,
+            )
+        else:
+            state.current_skill = None
+
         # Update the agent state
         state.thought_process.append(thoughts)
         state.current_node = "reasoning"
