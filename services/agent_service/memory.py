@@ -280,7 +280,16 @@ class MemoryManager:
             
             # Extract facts
             if "error" in llm_response:
-                logger.error(f"Error extracting key facts: {llm_response['error']}")
+                error_msg = llm_response['error']
+                logger.error(f"Error extracting key facts: {error_msg}")
+                
+                # If it's a safety filter block, skip memory extraction gracefully
+                if "safety filter" in error_msg.lower() or "blocked" in error_msg.lower():
+                    logger.info("Skipping memory extraction due to safety filter - this is normal for simple conversations")
+                    return
+                
+                # For other errors, also skip but log more details
+                logger.warning(f"Skipping memory extraction due to LLM error: {error_msg}")
                 return
             
             facts_text = llm_response.get("content", "")

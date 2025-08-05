@@ -36,7 +36,7 @@ class LLMConfig(BaseModel):
     top_p: Optional[float] = Field(default=None, description="Top-p value for the LLM")
     frequency_penalty: Optional[float] = Field(default=None, description="Frequency penalty for the LLM")
     presence_penalty: Optional[float] = Field(default=None, description="Presence penalty for the LLM")
-    provider: str = Field(default="groq", description="Provider of the LLM")
+    provider: str = Field(default="gemini", description="Provider of the LLM")
 
 
 class MemoryConfig(BaseModel):

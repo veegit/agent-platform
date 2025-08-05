@@ -1,13 +1,13 @@
 """
-Ask Follow-up Questions skill implementation using Groq API.
+Ask Follow-up Questions skill implementation using Gemini API.
 """
 
 import logging
 import os
-import httpx
 import json
 from typing import Any, Dict, List, Optional
 
+import google.generativeai as genai
 from shared.models.skill import (
     Skill,
     SkillParameter,
@@ -18,20 +18,20 @@ from shared.models.skill import (
 
 logger = logging.getLogger(__name__)
 
-# API key for Groq
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "MY_GROQ_API_KEY")
+# API key for Gemini
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "MY_GEMINI_API_KEY")
 
-# Groq API endpoint
-GROQ_API_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
+# Configure Gemini API
+genai.configure(api_key=GEMINI_API_KEY)
 
-# Groq model options
-GROQ_MODELS = ["llama3-8b-8192", "llama3-70b-8192", "mixtral-8x7b-32768", "gemma-7b-it"]
+# Gemini model options
+GEMINI_MODELS = ["gemini-2.5-flash", "gemini-1.5-pro", "gemini-1.5-flash"]
 
 # Skill definition
 SKILL_DEFINITION = Skill(
     skill_id="ask-follow-up",
     name="Ask Follow-up Questions",
-    description="Generate follow-up questions based on context using Groq API",
+    description="Generate follow-up questions based on context using Gemini API",
     parameters=[
         SkillParameter(
             name="context",
@@ -64,10 +64,10 @@ SKILL_DEFINITION = Skill(
         SkillParameter(
             name="model",
             type=ParameterType.STRING,
-            description="Groq model to use for generating questions",
+            description="Gemini model to use for generating questions",
             required=False,
-            default="llama3-70b-8192",
-            enum=GROQ_MODELS
+            default="gemini-2.5-flash",
+            enum=GEMINI_MODELS
         )
     ],
     response_format=ResponseFormat(
@@ -91,7 +91,7 @@ SKILL_DEFINITION = Skill(
         },
         description="List of follow-up questions with reasoning"
     ),
-    tags=["questions", "groq", "conversation", "llm"],
+    tags=["questions", "gemini", "conversation", "llm"],
     invocation_patterns=[
         InvocationPattern(
             pattern="follow-up",
@@ -181,11 +181,11 @@ async def execute(
     num_questions = parameters.get("num_questions", 3)
     focus_area = parameters.get("focus_area")
     question_type = parameters.get("question_type", "general")
-    model = parameters.get("model", "llama3-70b-8192")
+    model = parameters.get("model", "gemini-2.5-flash")
     
     focus_instruction = f" Focus on {focus_area}." if focus_area else ""
     
-    logger.info(f"Generating {num_questions} follow-up questions of type {question_type} using Groq model {model}")
+    logger.info(f"Generating {num_questions} follow-up questions of type {question_type} using Gemini model {model}")
     
     try:
         # Prepare question type instructions
@@ -225,57 +225,71 @@ async def execute(
         {context}
         """
         
-        # Prepare the request payload
-        payload = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            "max_tokens": 1000,
-            "temperature": 0.7,  # Slightly higher for more creative questions
-            "response_format": {"type": "json_object"}  # Request JSON response
-        }
+        # Initialize the Gemini model
+        gemini_model = genai.GenerativeModel(model)
         
-        # Set up headers with API key
-        headers = {
-            "Authorization": f"Bearer {GROQ_API_KEY}",
-            "Content-Type": "application/json"
-        }
+        # Configure generation parameters
+        generation_config = genai.types.GenerationConfig(
+            temperature=0.7,  # Slightly higher for more creative questions
+            max_output_tokens=1000,
+        )
         
-        # Call Groq API
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                GROQ_API_ENDPOINT,
-                headers=headers,
-                json=payload,
-                timeout=30.0
-            )
-            
-            # Parse response
-            if response.status_code == 200:
-                response_data = response.json()
-                content = response_data["choices"][0]["message"]["content"]
-                
-                # Parse the JSON response
-                questions_data = json.loads(content)
-                
-                # Ensure we have the expected number of questions
-                if len(questions_data["questions"]) > num_questions:
-                    questions_data["questions"] = questions_data["questions"][:num_questions]
-                
-                # Add metadata to the result
-                result = questions_data
-                result["model"] = model
-                result["focus_area"] = focus_area if focus_area else "general"
-                result["question_type"] = question_type
-                
-                logger.info(f"Generated {len(result['questions'])} follow-up questions successfully using {model}")
-                return result
+        # Configure safety settings to be less restrictive
+        safety_settings = [
+            {
+                "category": "HARM_CATEGORY_HARASSMENT",
+                "threshold": "BLOCK_ONLY_HIGH"
+            },
+            {
+                "category": "HARM_CATEGORY_HATE_SPEECH",
+                "threshold": "BLOCK_ONLY_HIGH"
+            },
+            {
+                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                "threshold": "BLOCK_ONLY_HIGH"
+            },
+            {
+                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                "threshold": "BLOCK_ONLY_HIGH"
+            }
+        ]
+        
+        # Create the full prompt with JSON schema instruction
+        full_prompt = f"{system_prompt}\n\n{user_prompt}"
+        
+        # Call Gemini API
+        response = await gemini_model.generate_content_async(
+            full_prompt,
+            generation_config=generation_config,
+            safety_settings=safety_settings
+        )
+        
+        # Extract content from response
+        content = response.text
+        
+        # Parse the JSON response
+        try:
+            questions_data = json.loads(content)
+        except json.JSONDecodeError:
+            # Try to extract JSON from markdown code blocks if present
+            if "```json" in content:
+                json_content = content.split("```json")[1].split("```")[0].strip()
+                questions_data = json.loads(json_content)
             else:
-                error_message = f"Groq API request failed with status code {response.status_code}: {response.text}"
-                logger.error(error_message)
-                raise Exception(error_message)
+                raise Exception("Failed to parse JSON response from Gemini")
+        
+        # Ensure we have the expected number of questions
+        if len(questions_data["questions"]) > num_questions:
+            questions_data["questions"] = questions_data["questions"][:num_questions]
+        
+        # Add metadata to the result
+        result = questions_data
+        result["model"] = model
+        result["focus_area"] = focus_area if focus_area else "general"
+        result["question_type"] = question_type
+        
+        logger.info(f"Generated {len(result['questions'])} follow-up questions successfully using {model}")
+        return result
         
     except Exception as e:
         logger.error(f"Error in ask follow-up questions skill: {e}")

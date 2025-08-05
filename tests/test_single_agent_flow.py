@@ -116,7 +116,7 @@ def test_single_agent_process_message():
             tone='neutral',
             system_prompt=''
         ),
-        reasoning_model=ReasoningModel.LLAMA3_70B,
+        reasoning_model=ReasoningModel.GEMINI_2_5_FLASH,
         skills=[],
         memory=MemoryConfig(),
         is_supervisor=False

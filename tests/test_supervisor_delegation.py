@@ -126,7 +126,7 @@ def test_supervisor_finance_delegation(monkeypatch):
             tone='neutral',
             system_prompt=''
         ),
-        reasoning_model=ReasoningModel.LLAMA3_70B,
+        reasoning_model=ReasoningModel.GEMINI_2_5_FLASH,
         skills=['finance'],
         memory=MemoryConfig(),
         is_supervisor=False
@@ -151,7 +151,7 @@ def test_supervisor_finance_delegation(monkeypatch):
             tone='helpful',
             system_prompt=''
         ),
-        reasoning_model=ReasoningModel.LLAMA3_70B,
+        reasoning_model=ReasoningModel.GEMINI_2_5_FLASH,
         skills=[],
         memory=MemoryConfig(),
         is_supervisor=True
@@ -198,7 +198,7 @@ def test_supervisor_general_delegation(monkeypatch):
             tone='neutral',
             system_prompt=''
         ),
-        reasoning_model=ReasoningModel.LLAMA3_70B,
+        reasoning_model=ReasoningModel.GEMINI_2_5_FLASH,
         skills=['web-search'],
         memory=MemoryConfig(),
         is_supervisor=False
@@ -216,7 +216,7 @@ def test_supervisor_general_delegation(monkeypatch):
     supervisor_config = AgentConfig(
         agent_id='supervisor-agent',
         persona=AgentPersona(name='Sup', description='sup', goals=[], constraints=[], tone='helpful', system_prompt=''),
-        reasoning_model=ReasoningModel.LLAMA3_70B,
+        reasoning_model=ReasoningModel.GEMINI_2_5_FLASH,
         skills=[],
         memory=MemoryConfig(),
         is_supervisor=True
@@ -250,7 +250,7 @@ def test_supervisor_fallback_when_agent_has_no_skills(monkeypatch):
     finance_config = AgentConfig(
         agent_id='finance-agent',
         persona=AgentPersona(name='Fin', description='none', goals=[], constraints=[], tone='neutral', system_prompt=''),
-        reasoning_model=ReasoningModel.LLAMA3_70B,
+        reasoning_model=ReasoningModel.GEMINI_2_5_FLASH,
         skills=[],
         memory=MemoryConfig(),
         is_supervisor=False
@@ -266,7 +266,7 @@ def test_supervisor_fallback_when_agent_has_no_skills(monkeypatch):
     demo_config = AgentConfig(
         agent_id='default-agent',
         persona=AgentPersona(name='Default', description='gen', goals=[], constraints=[], tone='neutral', system_prompt=''),
-        reasoning_model=ReasoningModel.LLAMA3_70B,
+        reasoning_model=ReasoningModel.GEMINI_2_5_FLASH,
         skills=['web-search'],
         memory=MemoryConfig(),
         is_supervisor=False
@@ -284,7 +284,7 @@ def test_supervisor_fallback_when_agent_has_no_skills(monkeypatch):
     supervisor_config = AgentConfig(
         agent_id='supervisor-agent',
         persona=AgentPersona(name='Sup', description='sup', goals=[], constraints=[], tone='helpful', system_prompt=''),
-        reasoning_model=ReasoningModel.LLAMA3_70B,
+        reasoning_model=ReasoningModel.GEMINI_2_5_FLASH,
         skills=[],
         memory=MemoryConfig(),
         is_supervisor=True
@@ -318,7 +318,7 @@ def test_supervisor_conversation_tracking(monkeypatch):
     finance_config = AgentConfig(
         agent_id='finance-agent',
         persona=AgentPersona(name='Fin', description='none', goals=[], constraints=[], tone='neutral', system_prompt=''),
-        reasoning_model=ReasoningModel.LLAMA3_70B,
+        reasoning_model=ReasoningModel.GEMINI_2_5_FLASH,
         skills=['finance'],
         memory=MemoryConfig(),
         is_supervisor=False
@@ -338,7 +338,7 @@ def test_supervisor_conversation_tracking(monkeypatch):
     supervisor_config = AgentConfig(
         agent_id='supervisor-agent',
         persona=AgentPersona(name='Sup', description='sup', goals=[], constraints=[], tone='helpful', system_prompt=''),
-        reasoning_model=ReasoningModel.LLAMA3_70B,
+        reasoning_model=ReasoningModel.GEMINI_2_5_FLASH,
         skills=[],
         memory=MemoryConfig(),
         is_supervisor=True

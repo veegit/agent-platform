@@ -20,7 +20,7 @@ async def create_agent():
                 "tone": "friendly",
                 "system_prompt": "You are a test agent. Be helpful."
             },
-            "reasoning_model": "llama3_70b",
+            "reasoning_model": "gemini_2_5_flash",
             "skills": ["web-search", "summarize-text", "ask-follow-up"],
             "memory": {
                 "max_messages": 50,

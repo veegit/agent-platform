@@ -19,7 +19,7 @@ All services use Redis for state management and inter-service communication.
 - Python 3.11+
 - Redis (for local development)
 - SerpAPI key for web search skill (https://serpapi.com/)
-- Groq API key for LLM access (https://console.groq.com/)
+- Gemini API key for LLM access (https://aistudio.google.com/app/apikey)
 - Alpha Vantage API key for finance skill (https://www.alphavantage.co/)
 
 ### Local Installation
@@ -46,10 +46,10 @@ All services use Redis for state management and inter-service communication.
    cp .env.example .env
    ```
    
-5. Edit the `.env` file to add your SerpAPI and Groq API keys:
+5. Edit the `.env` file to add your SerpAPI and Gemini API keys:
    ```
    SERPAPI_API_KEY=your_serpapi_key_here
-   GROQ_API_KEY=your_groq_api_key_here
+   GEMINI_API_KEY=your_gemini_api_key_here
    ALPHAVANTAGE_API_KEY=your_alpha_vantage_key_here
    ```
 
@@ -65,7 +65,7 @@ All services use Redis for state management and inter-service communication.
    cp .env.example .env
    ```
    
-3. Edit the `.env` file to add your SerpAPI and Groq API keys
+3. Edit the `.env` file to add your SerpAPI and Gemini API keys
 
 4. Build and run the Docker containers:
    ```
@@ -151,7 +151,7 @@ curl -X POST http://localhost:8001/agents -H "Content-Type: application/json" -d
       "system_prompt": "You manage a team of domain experts. Coordinate with them only when necessary and avoid mentioning them unless relevant."
     },
     "llm": {
-      "model_name": "llama3-70b-8192",
+      "model_name": "gemini-2.5-flash",
       "temperature": 0.7,
       "max_tokens": 2000
     },
@@ -183,7 +183,7 @@ curl -X POST http://localhost:8001/agents \
             "system_prompt": "You are an expert research assistant."
           },
           "llm": {
-            "model_name": "llama3-70b-8192",
+            "model_name": "gemini-2.5-flash",
             "temperature": 0.7,
             "max_tokens": 2000
           },
@@ -218,7 +218,7 @@ curl -X POST http://localhost:8001/agents \
             "system_prompt": "You specialize in financial data and stock information."
           },
           "llm": {
-            "model_name": "llama3-70b-8192",
+            "model_name": "gemini-2.5-flash",
             "temperature": 0.7,
             "max_tokens": 2000
           },
@@ -376,7 +376,7 @@ The platform can be deployed to Azure Container Apps for a scalable, managed env
 - Azure Key Vault with the following secrets:
   - `REDIS-PASSWORD`: Password for Azure Cache for Redis
   - `SERP-API-KEY`: Your SerpAPI key
-  - `GROQ-API-KEY`: Your Groq API key
+  - `GEMINI-API-KEY`: Your Gemini API key
 
 #### Initial Deployment
 

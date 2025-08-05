@@ -164,7 +164,7 @@ class AgentRepository:
                 system_prompt="You are a helpful assistant."
             ),
             llm=LLMConfig(
-                model_name="llama3-70b-8192"
+                model_name="gemini-2.5-flash"
             ),
             skills=skills or [],
             is_supervisor=False

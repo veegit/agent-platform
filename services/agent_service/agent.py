@@ -73,12 +73,22 @@ class Agent:
             )
 
             logger.info(f"Calling LLM with user_message='{user_message}', system_prompt='{system_prompt}' and it returned: {result}")
+            
+            # Handle error responses from LLM
+            if "error" in result or "fallback" in result:
+                logger.warning(f"LLM returned error/fallback response: {result}")
+                return None
+            
             domain = result.get("domain")
             if domain and domain in self.delegations:
                 logger.info(f"LLM suggested domain '{domain}'")
                 return domain
+            elif domain == "general":
+                logger.info(f"LLM suggested general domain, will handle directly")
+                return None  # Handle directly instead of delegating
             elif domain:
-                logger.info(f"LLM suggested unknown domain '{domain}'")
+                logger.info(f"LLM suggested unknown domain '{domain}', will handle directly")
+                return None  # Handle directly instead of failing
         except Exception as e:
             logger.error(f"Failed to determine domain via LLM: {e}")
 

@@ -1,13 +1,13 @@
 """
-Summarize Text skill implementation using Groq API.
+Summarize Text skill implementation using Gemini API.
 """
 
 import logging
 import os
-import httpx
 import json
 from typing import Any, Dict, List, Optional
 
+import google.generativeai as genai
 from shared.models.skill import (
     Skill,
     SkillParameter,
@@ -18,20 +18,20 @@ from shared.models.skill import (
 
 logger = logging.getLogger(__name__)
 
-# API key for Groq
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "MY_GROQ_API_KEY")
+# API key for Gemini
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "MY_GEMINI_API_KEY")
 
-# Groq API endpoint
-GROQ_API_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
+# Configure Gemini API
+genai.configure(api_key=GEMINI_API_KEY)
 
-# Groq model options
-GROQ_MODELS = ["llama3-8b-8192", "llama3-70b-8192", "mixtral-8x7b-32768", "gemma-7b-it"]
+# Gemini model options
+GEMINI_MODELS = ["gemini-2.5-flash", "gemini-1.5-pro", "gemini-1.5-flash"]
 
 # Skill definition
 SKILL_DEFINITION = Skill(
     skill_id="summarize-text",
     name="Summarize Text",
-    description="Summarize text content using Groq API",
+    description="Summarize text content using Gemini API",
     parameters=[
         SkillParameter(
             name="text",
@@ -57,10 +57,10 @@ SKILL_DEFINITION = Skill(
         SkillParameter(
             name="model",
             type=ParameterType.STRING,
-            description="Groq model to use for summarization",
+            description="Gemini model to use for summarization",
             required=False,
-            default="llama3-70b-8192",
-            enum=GROQ_MODELS
+            default="gemini-2.5-flash",
+            enum=GEMINI_MODELS
         )
     ],
     response_format=ResponseFormat(
@@ -75,7 +75,7 @@ SKILL_DEFINITION = Skill(
         },
         description="Summary of the provided text"
     ),
-    tags=["summarization", "groq", "text-processing", "llm"],
+    tags=["summarization", "gemini", "text-processing", "llm"],
     invocation_patterns=[
         InvocationPattern(
             pattern="summarize",
@@ -164,9 +164,9 @@ async def execute(
     text = parameters["text"]
     max_tokens = parameters.get("max_tokens", 300)
     format_type = parameters.get("format", "paragraph")
-    model = parameters.get("model", "llama3-70b-8192")
+    model = parameters.get("model", "gemini-2.5-flash")
     
-    logger.info(f"Executing text summarization with Groq model {model} in {format_type} format")
+    logger.info(f"Executing text summarization with Gemini model {model} in {format_type} format")
     
     try:
         # Prepare format instructions based on format type
@@ -182,54 +182,58 @@ async def execute(
         system_prompt = f"You are an expert summarizer. Your task is to summarize text concisely and accurately, preserving the most important information."
         user_prompt = f"Summarize the following text. {instruction}\n\nText to summarize:\n{text}"
         
-        # Prepare the request payload
-        payload = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            "max_tokens": max_tokens,
-            "temperature": 0.3  # Lower temperature for more focused summaries
+        # Initialize the Gemini model
+        gemini_model = genai.GenerativeModel(model)
+        
+        # Configure generation parameters
+        generation_config = genai.types.GenerationConfig(
+            temperature=0.3,  # Lower temperature for more focused summaries
+            max_output_tokens=max_tokens,
+        )
+        
+        # Configure safety settings to be less restrictive
+        safety_settings = [
+            {
+                "category": "HARM_CATEGORY_HARASSMENT",
+                "threshold": "BLOCK_ONLY_HIGH"
+            },
+            {
+                "category": "HARM_CATEGORY_HATE_SPEECH",
+                "threshold": "BLOCK_ONLY_HIGH"
+            },
+            {
+                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                "threshold": "BLOCK_ONLY_HIGH"
+            },
+            {
+                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                "threshold": "BLOCK_ONLY_HIGH"
+            }
+        ]
+        
+        # Create the full prompt
+        full_prompt = f"{system_prompt}\n\n{user_prompt}"
+        
+        # Call Gemini API
+        response = await gemini_model.generate_content_async(
+            full_prompt,
+            generation_config=generation_config,
+            safety_settings=safety_settings
+        )
+        
+        # Extract summary from response
+        summary = response.text
+        
+        # Prepare result (note: Gemini doesn't provide token usage in the same way)
+        result = {
+            "summary": summary,
+            "tokens_used": 0,  # Gemini doesn't provide token count in response
+            "format": format_type,
+            "model": model
         }
         
-        # Set up headers with API key
-        headers = {
-            "Authorization": f"Bearer {GROQ_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        
-        # Call Groq API
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                GROQ_API_ENDPOINT,
-                headers=headers,
-                json=payload,
-                timeout=30.0
-            )
-            
-            # Parse response
-            if response.status_code == 200:
-                response_data = response.json()
-                summary = response_data["choices"][0]["message"]["content"]
-                
-                # Get token usage
-                total_tokens = response_data.get("usage", {}).get("total_tokens", 0)
-                
-                # Prepare result
-                result = {
-                    "summary": summary,
-                    "tokens_used": total_tokens,
-                    "format": format_type,
-                    "model": model
-                }
-                
-                logger.info(f"Text summarization completed successfully using {model}")
-                return result
-            else:
-                error_message = f"Groq API request failed with status code {response.status_code}: {response.text}"
-                logger.error(error_message)
-                raise Exception(error_message)
+        logger.info(f"Text summarization completed successfully using {model}")
+        return result
         
     except Exception as e:
         logger.error(f"Error in summarize text skill: {e}")

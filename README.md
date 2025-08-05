@@ -150,7 +150,7 @@ curl -X POST http://localhost:8001/agents -H "Content-Type: application/json" -d
       "system_prompt": "You manage a team of domain experts. Coordinate with them only when necessary and avoid mentioning them unless relevant."
     },
     "llm": {
-      "model_name": "llama3-70b-8192",
+      "model_name": "gemini-2.5-flash",
       "temperature": 0.7,
       "max_tokens": 2000
     },

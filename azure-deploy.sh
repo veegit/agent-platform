@@ -132,7 +132,7 @@ for service in "${SERVICES[@]}"; do
       --image $ACR_NAME.azurecr.io/agent-platform-$service:latest \
       --set-env-vars "REDIS_PASSWORD=secretref:redis-password" \
                     "SERPAPI_API_KEY=secretref:serpapi-api-key" \
-                    "GROQ_API_KEY=secretref:groq-api-key" \
+                    "GEMINI_API_KEY=secretref:gemini-api-key" \
                     "REDIS_HOST=agent-platform-redis.redis.cache.windows.net" \
                     "REDIS_PORT=6380" \
                     "REDIS_SSL=true"
@@ -157,7 +157,7 @@ for service in "${SERVICES[@]}"; do
                 "REDIS_SSL=true" \
       --secrets "redis-password=keyvaultref:https://$KEYVAULT_NAME.vault.azure.net/secrets/REDIS-PASSWORD,identityref:${IDENTITY_ID}" \
                "serpapi-api-key=keyvaultref:https://$KEYVAULT_NAME.vault.azure.net/secrets/SERP-API-KEY,identityref:${IDENTITY_ID}" \
-               "groq-api-key=keyvaultref:https://$KEYVAULT_NAME.vault.azure.net/secrets/GROQ-API-KEY,identityref:${IDENTITY_ID}"
+               "gemini-api-key=keyvaultref:https://$KEYVAULT_NAME.vault.azure.net/secrets/GEMINI-API-KEY,identityref:${IDENTITY_ID}"
   fi
 done
 

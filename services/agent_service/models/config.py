@@ -10,10 +10,9 @@ from pydantic import BaseModel, Field
 class ReasoningModel(str, Enum):
     """LLM models for agent reasoning."""
     
-    LLAMA3_8B = "llama3-8b-8192"
-    LLAMA3_70B = "llama3-70b-8192"
-    MIXTRAL_8X7B = "mixtral-8x7b-32768"
-    GEMMA_7B = "gemma-7b-it"
+    GEMINI_2_5_FLASH = "gemini-2.5-flash"
+    GEMINI_1_5_PRO = "gemini-1.5-pro"
+    GEMINI_1_5_FLASH = "gemini-1.5-flash"
 
 
 class MemoryConfig(BaseModel):
@@ -41,7 +40,7 @@ class AgentConfig(BaseModel):
 
     agent_id: str = Field(..., description="Unique identifier for the agent")
     persona: AgentPersona = Field(..., description="Agent's persona")
-    reasoning_model: ReasoningModel = Field(default=ReasoningModel.LLAMA3_70B, description="LLM model for reasoning")
+    reasoning_model: ReasoningModel = Field(default=ReasoningModel.GEMINI_2_5_FLASH, description="LLM model for reasoning")
     skills: List[str] = Field(default_factory=list, description="Skills available to the agent")
     memory: MemoryConfig = Field(default_factory=MemoryConfig, description="Configuration for agent memory")
     is_supervisor: bool = Field(default=False, description="Whether this agent acts as a Supervisor")
@@ -65,7 +64,7 @@ class AgentConfig(BaseModel):
                     "tone": "professional and helpful",
                     "system_prompt": "You are a research assistant that helps users find and understand information. Always strive to provide factual, accurate responses and assist the user with their research needs."
                 },
-                "reasoning_model": "llama3-70b-8192",
+                "reasoning_model": "gemini-2.5-flash",
                 "skills": ["web-search", "summarize-text", "ask-follow-up"],
                 "memory": {
                     "max_messages": 50,

@@ -48,7 +48,7 @@ def test_create_agent_registers_domain():
             tone='neutral',
             system_prompt=''
         ),
-        llm=LLMConfig(model_name='llama3-70b-8192'),
+        llm=LLMConfig(model_name='gemini-2.5-flash'),
         skills=['finance'],
         memory=MemoryConfig(),
         is_supervisor=False,

@@ -189,7 +189,7 @@ async def startup_event():
                 tone="helpful",
                 system_prompt="You are a helpful general assistant.",
             ),
-            reasoning_model=ReasoningModel.LLAMA3_70B,
+            reasoning_model=ReasoningModel.GEMINI_2_5_FLASH,
             skills=general_skill_ids,
             memory=MemoryConfig(),
             is_supervisor=False,
@@ -215,7 +215,7 @@ async def startup_event():
                     "do not mention them unless the user asks about a specific domain."
                 ),
             ),
-            reasoning_model=ReasoningModel.LLAMA3_70B,
+            reasoning_model=ReasoningModel.GEMINI_2_5_FLASH,
             skills=[],
             memory=MemoryConfig(),
             is_supervisor=True,
