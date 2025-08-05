@@ -7,6 +7,13 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
+# Import AgentFlow for tracking agent execution paths
+try:
+    from shared.models.agent_flow import AgentFlow
+except ImportError:
+    # Fallback if import fails during development
+    AgentFlow = None
+
 
 class ConversationStatus(str, Enum):
     """Status of a conversation."""
@@ -32,6 +39,7 @@ class Message(BaseModel):
     content: str = Field(..., description="Content of the message")
     timestamp: datetime = Field(..., description="Timestamp of the message")
     metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata")
+    agent_flow: Optional[Any] = Field(default=None, description="Agent execution flow data for this message")
 
 
 class ConversationSummary(BaseModel):

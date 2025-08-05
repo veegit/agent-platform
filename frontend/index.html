@@ -6,6 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Agentic Chat</title>
   <link rel="stylesheet" href="/style.css" />
+  <!-- D3.js for diagram visualization -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body>
   <div class="container">
@@ -28,6 +30,19 @@
         <button id="sendBtn">Send</button>
         <!-- you can reuse the same spinner if you like -->
         <div id="spinner" class="hidden">⏳</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Agent Flow Diagram Modal -->
+  <div id="flowModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Agent Flow Diagram</h3>
+        <button class="modal-close" id="closeModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="flowDiagram"></div>
       </div>
     </div>
   </div>

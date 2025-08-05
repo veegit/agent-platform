@@ -26,6 +26,7 @@ class Message(BaseModel):
     content: str = Field(..., description="Content of the message")
     timestamp: datetime = Field(default_factory=datetime.now, description="Timestamp of the message")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    agent_flow: Optional[Dict[str, Any]] = Field(default=None, description="Agent execution flow data for this message")
 
 
 class Memory(BaseModel):
