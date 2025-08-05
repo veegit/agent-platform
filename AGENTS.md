@@ -21,6 +21,9 @@ All services use Redis for state management and inter-service communication.
 - SerpAPI key for web search skill (https://serpapi.com/)
 - Groq API key for LLM access (https://console.groq.com/)
 - Alpha Vantage API key for finance skill (https://www.alphavantage.co/)
+- Campertunity MCP server API key (https://server.smithery.ai/)
+- Google Geocode API key (https://developers.google.com/maps/documentation/geocoding)
+- Airbnb MCP server API key (https://server.smithery.ai/@openbnb-org/mcp-server-airbnb)
 
 ### Local Installation
 1. Clone the repository
@@ -234,6 +237,41 @@ curl -X POST http://localhost:8001/agents \
         "created_by": "admin",
         "domain": "finance",
         "keywords": ["stocks", "market", "investment"]
+      }'
+```
+
+#### Create Booking Agent
+```bash
+curl -X POST http://localhost:8001/agents \
+  -H "Content-Type: application/json" \
+  -d '{
+        "config": {
+          "agent_id": "booking-agent",
+          "persona": {
+            "name": "Booking Agent",
+            "description": "Searches for campsites using the Campertunity MCP server",
+            "goals": ["Provide campsite availability and options"],
+            "constraints": ["No direct booking transactions; only search and list"],
+            "tone": "helpful and informative",
+            "system_prompt": "You are a booking agent specialized in finding camping spots. Use the Campertunity MCP server to search for campsites."
+          },
+          "llm": {
+            "model_name": "llama3-70b-8192",
+            "temperature": 0.7,
+            "max_tokens": 2000
+          },
+          "skills": ["geocode-address", "place-search", "airbnb-search"],
+          "memory": {
+            "max_messages": 50,
+            "summarize_after": 20,
+            "long_term_memory_enabled": true,
+            "key_fact_extraction_enabled": true
+          },
+          "is_supervisor": false
+        },
+        "created_by": "admin",
+        "domain": "booking",
+        "keywords": ["camp", "camping", "campsite"]
       }'
 ```
 
