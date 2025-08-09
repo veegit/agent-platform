@@ -117,7 +117,37 @@ function appendMessage(sender, text, agentFlow = null) {
   // Create message content container
   const messageContent = document.createElement('div');
   messageContent.classList.add('message-content');
-  messageContent.textContent = `${sender}: ${text}`;
+  
+  // Handle different text formats
+  let displayText = text;
+  
+  // Check if text is a JSON object (shouldn't happen after backend fix, but safety check)
+  if (typeof text === 'object' && text !== null) {
+    if (text.content) {
+      displayText = text.content;
+    } else {
+      displayText = JSON.stringify(text);
+    }
+  }
+  
+  // Ensure displayText is a string
+  if (typeof displayText !== 'string') {
+    displayText = String(displayText);
+  }
+  
+  // For user messages, just show plain text
+  if (sender === 'You') {
+    messageContent.textContent = `${sender}: ${displayText}`;
+  } else {
+    // For agent messages, render markdown
+    const senderSpan = document.createElement('strong');
+    senderSpan.textContent = `${sender}: `;
+    messageContent.appendChild(senderSpan);
+    
+    const contentDiv = document.createElement('div');
+    contentDiv.innerHTML = marked.parse(displayText);
+    messageContent.appendChild(contentDiv);
+  }
   
   msg.appendChild(messageContent);
   

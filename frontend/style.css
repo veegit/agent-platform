@@ -49,6 +49,73 @@ body {
     flex-direction: row-reverse;
   }
   
+  /* Markdown styling for agent messages */
+  .message-content h1,
+  .message-content h2,
+  .message-content h3,
+  .message-content h4,
+  .message-content h5,
+  .message-content h6 {
+    margin: 0.5em 0 0.3em 0;
+    color: #333;
+    font-weight: bold;
+  }
+  
+  .message-content h1 { font-size: 1.5em; }
+  .message-content h2 { font-size: 1.3em; }
+  .message-content h3 { font-size: 1.1em; }
+  
+  .message-content ul,
+  .message-content ol {
+    margin: 0.5em 0;
+    padding-left: 1.5em;
+  }
+  
+  .message-content li {
+    margin: 0.2em 0;
+  }
+  
+  .message-content p {
+    margin: 0.5em 0;
+    line-height: 1.4;
+  }
+  
+  .message-content code {
+    background-color: #f4f4f4;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+  }
+  
+  .message-content pre {
+    background-color: #f4f4f4;
+    padding: 10px;
+    border-radius: 5px;
+    overflow-x: auto;
+    margin: 0.5em 0;
+  }
+  
+  .message-content pre code {
+    background-color: transparent;
+    padding: 0;
+  }
+  
+  .message-content blockquote {
+    border-left: 4px solid #ddd;
+    margin: 0.5em 0;
+    padding-left: 1em;
+    color: #666;
+  }
+  
+  .message-content strong {
+    font-weight: bold;
+  }
+  
+  .message-content em {
+    font-style: italic;
+  }
+  
   .message-content {
     flex: 1;
   }
