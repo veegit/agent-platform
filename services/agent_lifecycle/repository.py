@@ -406,6 +406,72 @@ class AgentRepository:
         except Exception as e:
             logger.error(f"Failed to update configuration of agent {agent_id}: {e}")
             return False
+
+    async def update_agent_config_with_delegate(
+        self, 
+        agent_id: str, 
+        config: AgentConfig, 
+        domain: Optional[str] = None,
+        keywords: Optional[List[str]] = None
+    ) -> bool:
+        """Update an agent's configuration and optionally manage its delegate domain.
+        
+        Args:
+            agent_id: The ID of the agent to update.
+            config: The new configuration.
+            domain: Optional domain name for delegation.
+            keywords: Optional keywords for domain matching.
+            
+        Returns:
+            bool: True if successful, False otherwise.
+        """
+        if not self.agent_store:
+            await self.initialize()
+        
+        try:
+            # First update the agent configuration
+            if not await self.update_agent_config(agent_id, config):
+                return False
+            
+            # Handle delegate domain management if provided
+            if domain and keywords:
+                try:
+                    await self.redis_manager.delegation_store.register_domain(
+                        domain,
+                        agent_id,
+                        keywords,
+                        config.skills,
+                    )
+                    logger.info(f"Updated delegate domain {domain} for agent {agent_id}")
+                except Exception as e:
+                    logger.error(f"Failed to update delegate domain {domain}: {e}")
+                    # Don't fail the entire operation if delegate update fails
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to update agent {agent_id} with delegate: {e}")
+            return False
+
+    async def get_agent_delegate_info(self, agent_id: str) -> tuple[Optional[str], List[str]]:
+        """Get delegate domain and keywords for an agent.
+        
+        Args:
+            agent_id: The ID of the agent.
+            
+        Returns:
+            tuple: (domain, keywords) or (None, []) if no delegate found.
+        """
+        try:
+            # Get all domains and find the one that maps to this agent
+            domains = await self.redis_manager.delegation_store.get_all_domains()
+            for domain, data in domains.items():
+                if data.get("agent_id") == agent_id:
+                    return domain, data.get("keywords", [])
+            return None, []
+        except Exception as e:
+            logger.error(f"Failed to get delegate info for agent {agent_id}: {e}")
+            return None, []
     
     async def _try_get_agent_from_redis(self, agent_id: str, status_filter: Optional[AgentStatus] = None) -> Optional[Agent]:
         """Try to get an agent directly from Redis.

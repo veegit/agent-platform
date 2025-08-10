@@ -19,7 +19,7 @@ All services use Redis for state management and inter-service communication.
 - Python 3.11+
 - Redis (for local development)
 - SerpAPI key for web search skill (https://serpapi.com/)
-- Groq API key for LLM access (https://console.groq.com/)
+- Gemini API key for LLM access (https://aistudio.google.com/app/apikey)
 - Alpha Vantage API key for finance skill (https://www.alphavantage.co/)
 
 ### Local Installation
@@ -46,10 +46,10 @@ All services use Redis for state management and inter-service communication.
    cp .env.example .env
    ```
    
-5. Edit the `.env` file to add your SerpAPI and Groq API keys:
+5. Edit the `.env` file to add your API keys:
    ```
    SERPAPI_API_KEY=your_serpapi_key_here
-   GROQ_API_KEY=your_groq_api_key_here
+   GEMINI_API_KEY=your_gemini_api_key_here
    ALPHAVANTAGE_API_KEY=your_alpha_vantage_key_here
    ```
 
@@ -65,7 +65,7 @@ All services use Redis for state management and inter-service communication.
    cp .env.example .env
    ```
    
-3. Edit the `.env` file to add your SerpAPI and Groq API keys
+3. Edit the `.env` file to add your API keys
 
 4. Build and run the Docker containers:
    ```
@@ -225,16 +225,126 @@ The platform comes with several built-in skills:
 4. **Finance Skill** (`finance`): Get the latest stock price using Alpha Vantage
    - Parameters: `symbol`
 
-### Adding Domain Agents
+## Agent Management & Delegate System
 
-Supervisor agents delegate tasks using LLM reasoning over domain mappings stored in
-Redis. Each domain mapping may also specify example keywords used to validate the
-LLM's suggested domain. The Supervisor itself has no skills and instead uses its
-reasoning model to select an agent such as the Default Agent or Finance Agent. To
-add a new specialized agent (e.g., Bluesky or Foursquare), register its domain,
-keywords, and agent ID in Redis and the Supervisor will route matching queries
-based on the reasoning output. If the selected agent lacks the required skills or
-cannot answer, the Supervisor falls back to a general agent.
+### Bootstrap Script
+
+The platform includes a bootstrap script that can recreate your entire agent setup from scratch. This is particularly useful when you need to reset your Redis volume or set up a new environment.
+
+**Usage:**
+```bash
+./bootstrap.sh <hostname>
+```
+
+**Examples:**
+```bash
+# For local development
+./bootstrap.sh localhost
+
+# For remote deployment
+./bootstrap.sh 192.168.1.100
+```
+
+The bootstrap script will:
+1. Create all agents (Supervisor, Research, Finance) with their configurations
+2. Set up delegate domain mappings automatically
+3. Activate all agents
+4. Verify the setup
+
+### Delegate Management
+
+The platform uses a sophisticated delegate system where the Supervisor Agent routes queries to specialized agents based on domain expertise.
+
+#### Current Delegate Domains:
+- **Research Domain**: Handled by Research Agent
+  - Keywords: `research`, `analysis`, `sources`
+  - Skills: `ask-follow-up`, `summarize-text`, `web-search`
+
+- **Finance Domain**: Handled by Finance Agent  
+  - Keywords: `stocks`, `market`, `investment`
+  - Skills: `finance`
+
+#### Managing Delegates via API
+
+**Create Agent with Delegate Domain:**
+```bash
+curl -X POST http://localhost:8001/agents \
+  -H "Content-Type: application/json" \
+  -d '{
+    "config": {
+      "agent_id": "healthcare-agent",
+      "persona": {
+        "name": "Healthcare Agent",
+        "description": "Provides medical information and health advice",
+        "goals": ["Provide accurate health information"],
+        "constraints": ["No diagnostic advice"],
+        "tone": "caring and professional",
+        "system_prompt": "You are a healthcare information specialist."
+      },
+      "llm": {
+        "model_name": "gemini-2.5-flash",
+        "temperature": 0.7,
+        "max_tokens": 2000,
+        "provider": "gemini"
+      },
+      "skills": ["web-search"],
+      "is_supervisor": false
+    },
+    "domain": "healthcare",
+    "keywords": ["medical", "health", "doctor", "medicine"]
+  }'
+```
+
+**Update Agent Delegate Configuration:**
+```bash
+curl -X PUT http://localhost:8001/agents/finance-agent/config \
+  -H "Content-Type: application/json" \
+  -d '{
+    "config": {
+      "agent_id": "finance-agent",
+      "persona": {
+        "name": "Finance Agent",
+        "description": "Enhanced financial analysis agent",
+        "goals": ["Provide comprehensive market analysis"],
+        "constraints": ["No investment advice"],
+        "tone": "professional",
+        "system_prompt": "You specialize in financial data and market analysis."
+      },
+      "llm": {
+        "model_name": "gemini-2.5-flash",
+        "temperature": 0.7,
+        "max_tokens": 2000,
+        "provider": "gemini"
+      },
+      "skills": ["finance", "web-search"],
+      "is_supervisor": false
+    },
+    "domain": "finance",
+    "keywords": ["stocks", "market", "investment", "crypto", "trading", "portfolio"]
+  }'
+```
+
+**List All Agents with Delegate Information:**
+```bash
+curl -X GET http://localhost:8001/agents | jq '.agents[] | {agent_id, domain, keywords}'
+```
+
+#### How Delegation Works
+
+1. **User Query**: User sends a message to the platform
+2. **Supervisor Analysis**: Supervisor Agent analyzes the query using LLM reasoning
+3. **Domain Matching**: System matches query intent to delegate domains using keywords
+4. **Agent Routing**: Query is routed to the appropriate specialized agent
+5. **Response Synthesis**: Supervisor may synthesize responses from multiple agents
+6. **Fallback**: If no specialized agent matches, falls back to general agent
+
+#### Verifying Delegate Setup
+
+Check delegate mappings in Redis:
+```bash
+docker exec -it agent-platform-redis-1 redis-cli keys "delegate:*"
+docker exec -it agent-platform-redis-1 redis-cli get "delegate:domain:finance"
+```
 
 ## Service Ports
 

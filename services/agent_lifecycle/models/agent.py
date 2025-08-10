@@ -96,6 +96,8 @@ class UpdateAgentConfigRequest(BaseModel):
     """Request model for updating an agent's configuration."""
     
     config: AgentConfig = Field(..., description="Updated agent configuration")
+    domain: Optional[str] = Field(default=None, description="Domain name for delegation")
+    keywords: Optional[List[str]] = Field(default=None, description="Keywords for domain matching")
 
 
 # Response models for API
@@ -108,6 +110,8 @@ class AgentResponse(BaseModel):
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
     created_by: Optional[str] = Field(default=None, description="User who created the agent")
+    domain: Optional[str] = Field(default=None, description="Domain this agent handles as a delegate")
+    keywords: List[str] = Field(default_factory=list, description="Keywords for delegate domain matching")
 
 
 class AgentListResponse(BaseModel):
