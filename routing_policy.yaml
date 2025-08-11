@@ -1,0 +1,81 @@
+# Model Router Configuration
+# Defines model capabilities, routing policies, and fallback behavior
+
+models:
+  gemini_flash:
+    id: "google/gemini-2.5-flash"
+    rpm_limit: 900    # High concurrency model for general use
+    cost_per_1k_tokens_usd: 0.0002
+    latency_ms_avg: 400
+  groq_llama_70b:
+    id: "groq/llama-3-70b"
+    rpm_limit: 60     # Lower concurrency but high capability model
+    cost_per_1k_tokens_usd: 0.0001
+    latency_ms_avg: 300
+
+# Routing policies per agent role
+routing_policy:
+  # Supervisor Agent: Handles delegation and coordination
+  supervisor:
+    primary: gemini_flash      # Fast for delegation decisions
+    fallback: groq_llama_70b   # Fallback to high-capability model
+  
+  # Research Agent: Handles web search and analysis
+  research_agent:
+    primary: gemini_flash      # Fast for research tasks
+    fallback: groq_llama_70b   # Fallback for complex analysis
+  
+  # Finance Agent: Handles financial data and analysis
+  finance_agent:
+    primary: groq_llama_70b    # High capability for financial analysis
+    fallback: gemini_flash     # Fallback for simpler tasks
+  
+  # Creative Agent: Handles creative writing and ideation
+  creative_agent:
+    primary: gemini_flash      # Fast for creative tasks
+    fallback: groq_llama_70b   # Fallback for complex creative work
+  
+  # Generic Agent: Default routing for unknown roles
+  generic:
+    primary: gemini_flash
+    fallback: groq_llama_70b
+
+# Task-specific routing overrides (optional)
+task_overrides:
+  # Use high-capability model for complex reasoning regardless of agent
+  reasoning:
+    high_priority_threshold: 4  # Priority >= 4 uses primary regardless of RPM
+  
+  # Use fast model for simple response formulation
+  response_formulation:
+    prefer_low_latency: true
+
+# Fallback behavior when both models are at RPM limits
+fallback_behavior:
+  mode: "immediate"           # immediate | queue
+  queue_retry_seconds: 60     # Retry interval for queued requests
+  max_queue_size: 100         # Maximum queued requests per model
+  emergency_fallback: true    # Allow exceeding RPM limits in emergencies
+
+# Cost optimization settings
+cost_optimization:
+  enabled: true
+  low_cost_mode_threshold: 0.001  # Switch to cheaper model above this cost/request
+  cost_tracking_window_hours: 24  # Track costs over this window
+
+# Logging and monitoring configuration
+logging:
+  enabled: true
+  verbosity: "info"           # debug | info | warn | error
+  log_fallback_events: true   # Log when fallback models are used
+  log_rpm_stats: true         # Log RPM utilization periodically
+  log_cost_stats: true        # Log cost statistics
+  stats_interval_minutes: 5   # Interval for periodic stats logging
+
+# Health check and monitoring
+monitoring:
+  enabled: true
+  health_check_interval_seconds: 30
+  alert_on_high_rpm_usage: 0.8      # Alert when usage > 80% of limit
+  alert_on_fallback_rate: 0.3       # Alert when fallback rate > 30%
+

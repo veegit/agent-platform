@@ -15,6 +15,7 @@ from services.agent_service.models.state import (
 )
 from services.agent_service.models.config import AgentConfig
 from services.agent_service.llm import call_llm
+from shared.utils.model_router import TaskMetadata, AgentRole, TaskType
 
 logger = logging.getLogger(__name__)
 
@@ -158,13 +159,34 @@ async def response_formulation_node(
             # Build the prompt
             prompt_data = _build_response_formulation_prompt(state, config)
             
+            # Determine agent role from config
+            agent_role = AgentRole.SUPERVISOR if config.is_supervisor else AgentRole.GENERIC
+            if hasattr(config.persona, 'name') and config.persona.name:
+                name_lower = config.persona.name.lower()
+                if 'research' in name_lower:
+                    agent_role = AgentRole.RESEARCH
+                elif 'finance' in name_lower:
+                    agent_role = AgentRole.FINANCE
+                elif 'creative' in name_lower:
+                    agent_role = AgentRole.CREATIVE
+            
+            # Create routing metadata
+            metadata = TaskMetadata(
+                agent_role=agent_role,
+                task_type=TaskType.RESPONSE_FORMULATION,
+                priority=1,
+                conversation_id=state.conversation_id,
+                user_id=state.user_id
+            )
+            
             # Call the LLM to generate a response
             llm_response = await call_llm(
                 messages=[{"role": "user", "content": prompt_data["user_prompt"]}],
                 model=config.reasoning_model,
                 temperature=0.7,
                 max_tokens=1000,
-                system_prompt=prompt_data["system_prompt"]
+                system_prompt=prompt_data["system_prompt"],
+                metadata=metadata
             )
             
             # Extract the response

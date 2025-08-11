@@ -36,3 +36,9 @@ multiprocess>=0.70.15
 
 # Anthropic (optional if using Claude fallback)
 anthropic>=0.7.0
+
+# YAML for configuration
+PyYAML>=6.0
+
+# Additional LLM providers
+groq>=0.4.0

@@ -28,11 +28,15 @@ from services.api.models.agent import (
 )
 from services.api.conversations import ConversationService
 from services.api.clients.agent_lifecycle_client import AgentLifecycleClient
+from services.api.routing_dashboard import get_routing_dashboard_router
 
 logger = logging.getLogger(__name__)
 
 # Create the router
 router = APIRouter()
+
+# Include routing dashboard
+router.include_router(get_routing_dashboard_router())
 
 
 # Dependencies

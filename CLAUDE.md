@@ -1,248 +1,323 @@
-# CLAUDE.md - Agentic Platform MVP Development Guide
+# CLAUDE.md - Agentic Platform Development Guide
 
 ## Project Overview
 
-This project is an MVP for an agentic platform with the following core components:
-1. Agent Lifecycle Service
-2. Agent Service
-3. Skill Service
-4. Redis for experiential memory
-5. Simple API layer for user interactions
+This is a fully-featured agentic platform with the following core components:
+1. **Agent Lifecycle Service** - Manages agent registration, configuration, and delegation
+2. **Agent Service** - Runs agent workflows using LangGraph
+3. **Skill Service** - Registry and execution engine for agent skills
+4. **API Service** - User-facing REST API for conversations and management
+5. **Redis** - State management, memory, and inter-service communication
 
-## Development Standards
+## Technology Stack
 
-### Technology Stack
-- Python 3.11+
-- LangGraph for agent workflow orchestration
-- FastAPI for API endpoints
-- Redis for memory storage and state management
-- LangChain for some skill integrations
+- **Python 3.11+** with type hints throughout
+- **LangGraph 0.0.15** for agent workflow orchestration
+- **FastAPI** for all API endpoints
+- **Redis 7** for state management and memory
+- **Google Gemini API** for LLM capabilities
+- **SerpAPI** for web search functionality
+- **Alpha Vantage API** for financial data
+- **Docker & Docker Compose** for deployment
 
-### Coding Standards
-- Use type hints throughout the codebase
-- Create modular components
-- Follow PEP 8 conventions
-- Use async/await pattern where appropriate for API endpoints
+## Project Structure
 
-### Project Structure
 ```
-agentic-platform/
+agent-platform/
 ├── services/
-│   ├── agent_lifecycle/
-│   ├── agent_service/
-│   ├── skill_service/
-│   └── api/
+│   ├── agent_lifecycle/        # Agent registration & delegation
+│   │   ├── main.py
+│   │   ├── router.py
+│   │   ├── repository.py
+│   │   └── models/agent.py
+│   ├── agent_service/          # LangGraph agent runtime
+│   │   ├── main.py
+│   │   ├── agent.py
+│   │   ├── graph.py            # LangGraph workflow
+│   │   ├── llm.py
+│   │   ├── memory.py
+│   │   ├── skill_client.py
+│   │   ├── models/
+│   │   │   ├── state.py        # Agent state models
+│   │   │   └── config.py
+│   │   └── nodes/              # LangGraph nodes
+│   │       ├── reasoning.py
+│   │       ├── skill_execution.py
+│   │       └── response_formulation.py
+│   ├── skill_service/          # Skill registry & execution
+│   │   ├── main.py
+│   │   ├── router.py
+│   │   ├── registry.py
+│   │   ├── executor.py
+│   │   ├── validator.py
+│   │   └── skills/
+│   │       ├── web_search.py
+│   │       ├── summarize_text.py
+│   │       ├── ask_follow_up.py
+│   │       └── finance.py
+│   └── api/                    # Main API layer
+│       ├── main.py
+│       ├── router.py
+│       ├── conversations.py
+│       ├── models/
+│       └── clients/
 ├── shared/
 │   ├── models/
+│   │   ├── skill.py
+│   │   └── agent_flow.py       # Flow tracking
 │   ├── utils/
+│   │   ├── redis_client.py
+│   │   ├── redis_agent_store.py
+│   │   ├── redis_conversation_store.py
+│   │   ├── redis_skill_store.py
+│   │   ├── redis_delegation_store.py
+│   │   └── json_utils.py
 │   └── config/
-├── docker-compose.yml
-├── requirements.txt
-└── README.md
+├── tests/                      # Comprehensive test suite
+├── frontend/                   # Simple web UI
+├── main.py                     # Unified service launcher
+├── bootstrap.sh               # Agent setup script
+├── azure-deploy.sh           # Azure deployment
+└── docker-compose.yml        # Multi-service deployment
 ```
 
-## Implementation Details
+## Core Models
 
-### Core Service Models
-
-#### Agent Model
+### Agent Configuration
 ```python
-class Agent:
-    agent_id: str  # Unique identifier
-    name: str  # Human-readable name
-    description: str  # Purpose description
-    status: str  # "active", "inactive", etc.
-    skills: List[str]  # Skill IDs the agent can use
-    config: Dict[str, Any]  # Configuration parameters
-```
-
-#### Skill Model
-```python
-class Skill:
-    skill_id: str  # Unique identifier
-    name: str  # Human-readable name
-    description: str  # What the skill does
-    parameters: List[Dict]  # Required and optional parameters
-    response_format: Dict  # Expected response structure
-```
-
-#### Conversation Model
-```python
-class Message:
-    id: str
-    role: str  # "user" or "agent"
-    content: str
-    timestamp: datetime
-    metadata: Dict[str, Any]  # Optional metadata
-
-class Conversation:
-    id: str
+class AgentConfig(BaseModel):
     agent_id: str
+    persona: PersonaConfig          # Name, description, goals, constraints
+    llm: LLMConfig                 # Model, temperature, max_tokens
+    skills: List[str]              # Available skill IDs
+    memory: MemoryConfig           # Memory settings
+    is_supervisor: bool = False    # Delegation capability
+```
+
+### Agent State (LangGraph)
+```python
+class AgentState(BaseModel):
+    agent_id: str
+    conversation_id: str
     user_id: str
     messages: List[Message]
-    status: str  # "active", "completed", etc.
-    created_at: datetime
-    updated_at: datetime
-    metadata: Dict[str, Any]  # Optional metadata
+    memory: Memory                 # Long-term & working memory
+    current_skill: Optional[SkillExecution]
+    skill_results: List[SkillResult]
+    thought_process: List[str]     # Agent reasoning
+    observations: List[str]
+    plan: List[str]
 ```
 
-### LangGraph Implementation
+### Skills
+Available skills with full implementations:
+- **web-search**: SerpAPI integration for web searches
+- **summarize-text**: Text summarization using Gemini
+- **ask-follow-up**: Context-based follow-up question generation  
+- **finance**: Stock price data via Alpha Vantage API
 
-Use LangGraph for implementing agent workflows. LangGraph helps create structured, stateful agent workflows, particularly suitable for this MVP. Specifically:
+## LangGraph Implementation
 
-1. Define agent state and transitions
-2. Create nodes for different agent operations (reasoning, skill execution, etc.)
-3. Define the graph structure connecting these nodes
-4. Handle conversation context and memory integration
+The platform uses LangGraph for sophisticated agent workflows:
 
-## Service Implementation Guidelines
-
-### 1. Agent Lifecycle Service
-
-Create a service that manages agent registration and status. Implement:
-
-- Agent creation/registration
-- Status management (activate/deactivate)
-- Configuration storage in Redis
-- Simple validation for agent configuration
-
-Use FastAPI for the REST endpoints and Redis for storage. Keep interfaces minimal but sufficient to demonstrate core functionality.
-
-### 2. Agent Service
-
-Implement the core agent runtime with LangGraph. Create:
-
-- A reasoning node that determines actions based on user input
-- A skill execution node that calls the Skill Service
-- A response formulation node that creates user-facing messages
-- State management that tracks conversation context
-
-Focus on a simple but effective reasoning approach for MVP - don't overengineer the cognitive architecture.
-
-### 3. Skill Service
-
-Create a simple skill registry and execution service:
-
-- Implement basic skill registration
-- Create skill validation logic
-- Develop execution framework
-- Implement three core skills:
-  - web-search: Use a simple wrapper around a search API using SerpAPI using the following API private key MY_API_KEY
-  - summarize-text: Use Claude
-  - ask-follow-up: Generate follow-up questions based on context
-
-### 4. Redis Integration
-
-Use Redis for all stateful data:
-
-- Agent configurations
-- Active conversations
-- Working memory for agents
-- Skill execution results
-
-Define clear Redis key structures and data formats. Use Redis data types appropriately (Hashes, Lists, Sets, etc.).
-
-### 5. API Layer
-
-Create a simple but complete API layer with FastAPI:
-
-- User authentication (simplified for MVP)
-- Conversation management
-- Message sending/receiving
-- Agent status queries
-
-## Implementation Sequence
-
-1. Set up the project structure and shared components
-2. Implement Redis integration and basic data models
-3. Create the Skill Service with 2-3 example skills
-4. Develop the Agent Service with LangGraph workflows
-5. Implement the Agent Lifecycle service
-6. Create the API layer
-7. Build a simple frontend (optional for MVP)
-
-## Development Tips
-
-1. Use a local Redis instance for development
-2. Create small, focused services that communicate via well-defined APIs
-3. Use environment variables for configuration
-4. Log agent actions and skill executions for debugging
-5. Implement proper error handling from the beginning
-
-## LangGraph-Specific Guidance
-
-When implementing the agent workflow with LangGraph:
-
-1. Use the `StateGraph` class to create the agent's state machine
-2. Define clear states like "receiving_input", "reasoning", "executing_skill", "formulating_response"
-3. Create typed state classes to maintain type safety
-4. Implement conditional edges for dynamic agent behavior
-5. Use the async API for better performance
-6. Leverage LangGraph's memory interfaces for maintaining context
-
-Example LangGraph structure:
+### State Graph Structure
 ```python
-from langgraph.graph import StateGraph
-from pydantic import BaseModel, Field
+# services/agent_service/graph.py
+workflow = StateGraph(AgentStateDict)
+workflow.add_node("reasoning", reasoning_node)
+workflow.add_node("skill_execution", skill_execution_node)
+workflow.add_node("response_formulation", response_formulation_node)
 
-# Define state
-class AgentState(BaseModel):
-    messages: List[Message] = Field(default_factory=list)
-    context: Dict[str, Any] = Field(default_factory=dict)
-    current_skill: Optional[str] = None
-    skill_results: List[Dict] = Field(default_factory=list)
-    
-# Create nodes
-def reasoning(state: AgentState) -> AgentState:
-    # Determine next actions
-    # ...
-    return updated_state
-
-def execute_skill(state: AgentState) -> AgentState:
-    # Call skill service
-    # ...
-    return updated_state
-
-def formulate_response(state: AgentState) -> AgentState:
-    # Create response for user
-    # ...
-    return updated_state
-
-# Build graph
-graph = StateGraph(AgentState)
-graph.add_node("reasoning", reasoning)
-graph.add_node("execute_skill", execute_skill)
-graph.add_node("formulate_response", formulate_response)
-
-# Add edges
-graph.add_edge("reasoning", "execute_skill")
-graph.add_edge("execute_skill", "formulate_response")
-graph.add_edge("formulate_response", "reasoning")
-
-# Conditional branching
-def should_execute_skill(state: AgentState) -> str:
-    if state.current_skill:
-        return "execute_skill"
-    return "formulate_response"
-
-graph.add_conditional_edges("reasoning", should_execute_skill, 
-                           {"execute_skill": "execute_skill", 
-                            "formulate_response": "formulate_response"})
-
-# Compile the graph
-agent_executor = graph.compile()
+# Conditional routing based on reasoning output
+workflow.add_conditional_edges(
+    "reasoning",
+    should_use_skill,
+    {
+        "skill_execution": "skill_execution",
+        "response_formulation": "response_formulation"
+    }
+)
 ```
 
-## Testing
+### Node Implementations
+1. **Reasoning Node** (`services/agent_service/nodes/reasoning.py`)
+   - Analyzes user input using LLM
+   - Determines appropriate actions
+   - Chooses skills or direct responses
 
-For the MVP, no unit tests or other tests are required to reduce token consumption
+2. **Skill Execution Node** (`services/agent_service/nodes/skill_execution.py`)
+   - Executes selected skills via Skill Service
+   - Handles skill parameters and validation
+   - Processes skill results
 
+3. **Response Formulation Node** (`services/agent_service/nodes/response_formulation.py`)
+   - Creates final responses for users
+   - Integrates skill results with context
+   - Formats output appropriately
+
+## Delegation System
+
+The platform supports a supervisor-delegate pattern:
+
+### Supervisor Agent
+- Routes queries to specialized agents based on domain keywords
+- Synthesizes responses from multiple agents
+- Maintains conversation context across delegations
+
+### Domain Registration
+```bash
+curl -X POST http://localhost:8001/agents \
+  -d '{
+    "config": {...},
+    "domain": "finance", 
+    "keywords": ["stocks", "market", "investment"]
+  }'
+```
+
+### Current Domains
+- **Research**: `research`, `analysis`, `sources`
+- **Finance**: `stocks`, `market`, `investment`, `crypto`
+
+## Redis Integration
+
+Redis stores all platform state:
+
+### Data Structures
+- `agent:{agent_id}:config` - Agent configurations (Hash)
+- `conversation:{conversation_id}` - Conversation data (Hash)  
+- `agent:{agent_id}:memory` - Agent memory (Hash)
+- `delegate:domain:{domain}` - Domain mappings (String)
+- `skill:{skill_id}` - Skill definitions (Hash)
+
+### Memory Management
+- **Working Memory**: Current conversation context
+- **Long-term Memory**: Key facts and conversation summaries
+- **Skill Results**: Cached execution results
+
+## Service Communication
+
+All services communicate via HTTP APIs:
+
+- **API Service** (8000): Main user interface
+- **Agent Lifecycle** (8001): Agent management
+- **Skill Service** (8002): Skill execution
+- **Agent Service** (8003): Agent workflows
+- **Redis** (6379): State storage
+
+### Client Implementations
+Each service has dedicated HTTP clients in `services/api/clients/` for type-safe inter-service communication.
+
+## Development Workflow
+
+### Setup
+```bash
+# Local development
+python main.py
+
+# Docker deployment  
+docker-compose up --build
+
+# Agent bootstrapping
+./bootstrap.sh localhost
+```
+
+### Environment Variables
+```
+# Core LLM APIs
+GEMINI_API_KEY=your_gemini_key
+GROQ_API_KEY=your_groq_key
+OPENROUTER_API_KEY=your_openrouter_key
+
+# Skill APIs
+SERPAPI_API_KEY=your_serpapi_key
+ALPHAVANTAGE_API_KEY=your_alpha_vantage_key
+
+# Infrastructure
+REDIS_HOST=localhost
+REDIS_PORT=6379
+LOG_LEVEL=INFO
+
+# Model Router (optional overrides)
+MODEL_ROUTER_USE_REDIS=true
+MODEL_ROUTER_LOG_LEVEL=info
+```
 
 ## Deployment
 
-For the MVP, a simple local deployment is sufficient. 
+### Local Development
+Use `main.py` which orchestrates all services with process management and auto-restart capabilities.
 
-## Documentation
+### Docker Deployment
+`docker-compose.yml` provides full multi-service deployment with:
+- Service dependencies
+- Volume mounting for development
+- Redis persistence
+- Redis Commander web UI (port 8081)
 
-For the MVP, No need to document in detail, keep is simple to reduce token consumption.
+### Azure Cloud Deployment
+`azure-deploy.sh` provides automated Azure Container Apps deployment with:
+- Container registry integration
+- Key Vault secret management
+- Managed identity configuration
+- Inter-service networking
+
+## Testing
+
+Comprehensive test suite in `tests/` covering:
+- Unit tests for core functionality
+- Integration tests for service communication
+- End-to-end workflow testing
+- Redis data integrity tests
+- Agent delegation flows
+
+## Agent Flow Tracking
+
+The platform includes sophisticated execution tracking (`shared/models/agent_flow.py`):
+- Flow visualization for debugging
+- Performance monitoring
+- Execution path analysis
+- Multi-agent delegation tracking
+
+## Development Standards
+
+### Code Quality
+- Complete type hints throughout
+- Pydantic models for data validation
+- Async/await for all I/O operations
+- Structured error handling and logging
+
+### Architecture Principles
+- Service separation with clear APIs
+- Redis-first state management
+- LangGraph for complex workflows
+- Docker-first deployment strategy
+
+## Model Router System
+
+The platform now includes a sophisticated Model Router that dynamically selects between multiple LLM providers based on agent roles, task types, and real-time RPM limits.
+
+### Supported Models
+- **Google Gemini 2.5 Flash**: High-speed model for general tasks
+- **Groq LLaMA 3 70B**: High-capability model for complex reasoning
+- **OpenRouter Fallback**: Universal fallback for any model
+
+### Routing Matrix
+- **Supervisor Agent**: Primary: Gemini Flash, Fallback: Groq LLaMA
+- **Research Agent**: Primary: Gemini Flash, Fallback: Groq LLaMA  
+- **Finance Agent**: Primary: Groq LLaMA, Fallback: Gemini Flash
+- **Creative Agent**: Primary: Gemini Flash, Fallback: Groq LLaMA
+
+### Key Features
+- **RPM Tracking**: Redis-based sliding window rate limiting
+- **Automatic Fallback**: Seamless switching when models hit limits
+- **Direct API Support**: Bypasses OpenRouter when possible for lower latency
+- **Real-time Monitoring**: Dashboard endpoints for routing statistics
+- **Configuration Reload**: Runtime policy updates without restart
+
+### Routing Dashboard
+Access routing metrics at:
+- `GET /routing/stats` - Overall routing statistics
+- `GET /routing/health` - System health check
+- `GET /routing/utilization/{model}` - Per-model utilization
+- `POST /routing/reload` - Reload configuration
 

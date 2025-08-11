@@ -16,6 +16,7 @@ from services.agent_service.models.state import (
 from shared.models.skill import SkillExecution
 from services.agent_service.models.config import AgentConfig
 from services.agent_service.llm import call_llm
+from shared.utils.model_router import TaskMetadata, AgentRole, TaskType
 
 logger = logging.getLogger(__name__)
 
@@ -329,6 +330,26 @@ IMPORTANT JSON FORMATTING INSTRUCTIONS:
         else:
             temperature = 0.7
         
+        # Determine agent role from config
+        agent_role = AgentRole.SUPERVISOR if config.is_supervisor else AgentRole.GENERIC
+        if hasattr(config.persona, 'name') and config.persona.name:
+            name_lower = config.persona.name.lower()
+            if 'research' in name_lower:
+                agent_role = AgentRole.RESEARCH
+            elif 'finance' in name_lower:
+                agent_role = AgentRole.FINANCE
+            elif 'creative' in name_lower:
+                agent_role = AgentRole.CREATIVE
+        
+        # Create routing metadata
+        metadata = TaskMetadata(
+            agent_role=agent_role,
+            task_type=TaskType.REASONING,
+            priority=3 if should_use_web_search else 1,
+            conversation_id=state.conversation_id,
+            user_id=state.user_id
+        )
+        
         # Call the LLM to get the reasoning output
         llm_response = await call_llm(
             messages=formatted_messages,
@@ -336,7 +357,8 @@ IMPORTANT JSON FORMATTING INSTRUCTIONS:
             temperature=temperature,  # Use the dynamic temperature setting
             max_tokens=2000,
             system_prompt=system_prompt,
-            output_schema=REASONING_OUTPUT_SCHEMA
+            output_schema=REASONING_OUTPUT_SCHEMA,
+            metadata=metadata
         )
         
         # Log the error if there is one

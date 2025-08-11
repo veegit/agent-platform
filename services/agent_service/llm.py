@@ -1,5 +1,5 @@
 """
-LLM integration for the Agent Service.
+LLM integration for the Agent Service with Model Router.
 """
 
 import logging
@@ -9,16 +9,19 @@ from typing import Any, Dict, List, Optional
 
 import google.generativeai as genai
 from services.agent_service.models.config import ReasoningModel
+from shared.utils.model_router import TaskMetadata, AgentRole, TaskType
+from shared.utils.llm_client import call_llm_with_routing, LLMResponse
 
 logger = logging.getLogger(__name__)
 
-# API key for Gemini
+# Legacy API key handling for backward compatibility
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 if not GEMINI_API_KEY or GEMINI_API_KEY == "MY_GEMINI_API_KEY":
     logger.warning("GEMINI_API_KEY not set or using placeholder value. Please set a valid API key.")
 
-# Configure Gemini API
-genai.configure(api_key=GEMINI_API_KEY)
+# Configure Gemini API for legacy fallback
+if GEMINI_API_KEY and GEMINI_API_KEY != "MY_GEMINI_API_KEY":
+    genai.configure(api_key=GEMINI_API_KEY)
 
 
 async def call_llm(
@@ -28,20 +31,73 @@ async def call_llm(
     max_tokens: int = 2000,
     system_prompt: Optional[str] = None,
     output_schema: Optional[Dict[str, Any]] = None,
+    metadata: Optional[TaskMetadata] = None,
 ) -> Dict[str, Any]:
-    """Call the LLM to get a response.
+    """Call the LLM to get a response with dynamic model routing.
     
     Args:
         messages: List of message objects with role and content.
-        model: The model to use.
+        model: The model to use (ignored if metadata provided for routing).
         temperature: The temperature to use for generation.
         max_tokens: The maximum number of tokens to generate.
         system_prompt: Optional system prompt to include at the beginning.
         output_schema: Optional JSON schema for structured output.
+        metadata: Optional task metadata for model routing.
         
     Returns:
         Dict[str, Any]: The LLM response.
     """
+    try:
+        # Use model router if metadata is provided
+        if metadata:
+            logger.info(f"Using model router for {metadata.agent_role}:{metadata.task_type}")
+            
+            response = await call_llm_with_routing(
+                messages=messages,
+                metadata=metadata,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                system_prompt=system_prompt,
+                output_schema=output_schema
+            )
+            
+            if response.error:
+                logger.error(f"Model router failed: {response.error}")
+                # Fallback to legacy Gemini call
+                return await _legacy_gemini_call(
+                    messages, model, temperature, max_tokens, system_prompt, output_schema
+                )
+            
+            # Convert LLMResponse to expected format
+            if output_schema:
+                try:
+                    return json.loads(response.content) if isinstance(response.content, str) else response.content
+                except json.JSONDecodeError:
+                    return {"error": "Failed to parse routed response as JSON", "raw_content": response.content}
+            else:
+                return response.content
+        
+        else:
+            # Fallback to legacy behavior
+            logger.info(f"Using legacy Gemini call with model {model.value}")
+            return await _legacy_gemini_call(
+                messages, model, temperature, max_tokens, system_prompt, output_schema
+            )
+            
+    except Exception as e:
+        logger.error(f"Error in LLM call: {e}")
+        return {"error": str(e)}
+
+
+async def _legacy_gemini_call(
+    messages: List[Dict[str, str]],
+    model: ReasoningModel,
+    temperature: float,
+    max_tokens: int,
+    system_prompt: Optional[str],
+    output_schema: Optional[Dict[str, Any]]
+) -> Dict[str, Any]:
+    """Legacy Gemini API call for backward compatibility."""
     try:
         logger.info(f"Calling Gemini LLM with model {model.value}")
         
@@ -94,7 +150,6 @@ async def call_llm(
         )
         
         # Configure safety settings to be less restrictive
-        # Use the proper Gemini safety setting format
         safety_settings = [
             {
                 "category": genai.types.HarmCategory.HARM_CATEGORY_HARASSMENT,
@@ -142,7 +197,6 @@ async def call_llm(
         if not response.candidates or len(response.candidates) == 0:
             error_msg = "Gemini response was blocked - no candidates returned"
             logger.error(error_msg)
-            # Return a fallback response for JSON requests
             if output_schema:
                 return {"error": "Response blocked", "fallback": True}
             return {"error": error_msg}
@@ -152,28 +206,17 @@ async def call_llm(
         # Check finish reason
         if hasattr(candidate, 'finish_reason'):
             finish_reason = candidate.finish_reason
-            logger.info(f"Prompt to Gemini: {gemini_messages}")
-            if finish_reason == 2:  # SAFETY
-                error_msg = "Gemini response was blocked by safety filters"
+            if finish_reason in [2, 3, 4]:  # SAFETY, RECITATION, OTHER
+                error_msg = f"Gemini response was blocked, finish_reason: {finish_reason}"
                 logger.error(error_msg)
-                # Return a fallback response for JSON requests
                 if output_schema:
-                    return {"error": "Safety filter blocked", "fallback": True}
-                return {"error": error_msg}
-            elif finish_reason == 3:  # RECITATION
-                error_msg = "Gemini response was blocked due to recitation concerns"
-                logger.error(error_msg)
-                return {"error": error_msg}
-            elif finish_reason == 4:  # OTHER
-                error_msg = "Gemini response was blocked for other reasons"
-                logger.error(error_msg)
+                    return {"error": "Response blocked", "fallback": True}
                 return {"error": error_msg}
         
         # Try to extract content safely
         try:
             content = response.text
         except Exception as e:
-            # If response.text fails, try to get content from parts
             try:
                 if candidate.content and candidate.content.parts:
                     content = "".join([part.text for part in candidate.content.parts if hasattr(part, 'text')])
@@ -194,7 +237,6 @@ async def call_llm(
         # Parse JSON if schema was provided
         if output_schema:
             try:
-                # Handle empty or whitespace-only content
                 if not content or not content.strip():
                     logger.error("Empty content received from Gemini")
                     return {"error": "Empty response", "fallback": True}
@@ -204,7 +246,7 @@ async def call_llm(
                 logger.error(f"Failed to parse LLM response as JSON: {e}")
                 logger.error(f"Raw content: '{content}'")
                 
-                # Try to extract JSON from the response (in case the LLM wrapped the JSON in markdown code blocks)
+                # Try to extract JSON from code blocks
                 if "```json" in content:
                     json_content = content.split("```json")[1].split("```")[0].strip()
                     try:
@@ -212,7 +254,7 @@ async def call_llm(
                     except json.JSONDecodeError:
                         logger.error("Failed to extract JSON from code block")
                 
-                # Try to find JSON-like content in the response
+                # Try to find JSON-like content
                 import re
                 json_match = re.search(r'\{[^{}]*\}', content)
                 if json_match:
@@ -221,12 +263,10 @@ async def call_llm(
                     except json.JSONDecodeError:
                         logger.error("Failed to parse extracted JSON pattern")
                 
-                # Return a fallback response that matches expected schema structure
                 return {"error": "JSON parse failed", "raw_content": content, "fallback": True}
         else:
-            # Return the raw content for non-JSON responses
             return content
             
     except Exception as e:
-        logger.error(f"Error calling Gemini LLM: {e}")
+        logger.error(f"Error calling legacy Gemini LLM: {e}")
         return {"error": str(e)}
