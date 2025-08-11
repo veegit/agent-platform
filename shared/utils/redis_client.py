@@ -323,9 +323,97 @@ class RedisClient:
         except (RedisError, TypeError) as e:
             logger.error(f"Failed to remove values from set {key}: {e}")
             return 0
+
+    async def zadd(self, key: str, mapping: Dict[str, float]) -> int:
+        """Add members to a sorted set.
+        
+        Args:
+            key: The sorted set key.
+            mapping: Dictionary mapping members to scores.
+            
+        Returns:
+            int: Number of elements added.
+        """
+        try:
+            return await self.redis.zadd(key, mapping)
+        except RedisError as e:
+            logger.error(f"Failed to add to sorted set {key}: {e}")
+            return 0
+
+    async def zcard(self, key: str) -> int:
+        """Get the number of elements in a sorted set.
+        
+        Args:
+            key: The sorted set key.
+            
+        Returns:
+            int: Number of elements in the sorted set.
+        """
+        try:
+            return await self.redis.zcard(key)
+        except RedisError as e:
+            logger.error(f"Failed to get sorted set cardinality {key}: {e}")
+            return 0
+
+    async def zremrangebyscore(self, key: str, min_score: float, max_score: float) -> int:
+        """Remove elements from a sorted set by score range.
+        
+        Args:
+            key: The sorted set key.
+            min_score: Minimum score (inclusive).
+            max_score: Maximum score (inclusive).
+            
+        Returns:
+            int: Number of elements removed.
+        """
+        try:
+            return await self.redis.zremrangebyscore(key, min_score, max_score)
+        except RedisError as e:
+            logger.error(f"Failed to remove from sorted set by score {key}: {e}")
+            return 0
+
+    async def expire(self, key: str, seconds: int) -> bool:
+        """Set expiration time for a key.
+        
+        Args:
+            key: The key to set expiration for.
+            seconds: Expiration time in seconds.
+            
+        Returns:
+            bool: True if expiration was set, False otherwise.
+        """
+        try:
+            return await self.redis.expire(key, seconds)
+        except RedisError as e:
+            logger.error(f"Failed to set expiration for key {key}: {e}")
+            return False
     
     async def close(self) -> None:
         """Close the Redis connection."""
         if self.redis:
             await self.redis.close()
             logger.info("Redis connection closed")
+
+
+class RedisClientManager:
+    """Manager for Redis client connections."""
+    
+    def __init__(self):
+        """Initialize the Redis client manager."""
+        self._client = None
+    
+    def get_client(self) -> RedisClient:
+        """Get or create a Redis client instance.
+        
+        Returns:
+            RedisClient: The Redis client instance.
+        """
+        if self._client is None:
+            self._client = RedisClient()
+        return self._client
+    
+    async def close(self) -> None:
+        """Close all Redis connections."""
+        if self._client:
+            await self._client.close()
+            self._client = None

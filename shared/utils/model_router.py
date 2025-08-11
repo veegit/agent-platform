@@ -97,7 +97,7 @@ class RPMTracker:
     async def _redis_increment_and_check(self, model_id: str, rpm_limit: int) -> bool:
         """Redis-based RPM tracking with sliding window."""
         try:
-            redis_client = await self.redis_manager.get_client()
+            redis_client = self.redis_manager.get_client()
             current_time = int(time.time())
             window_start = current_time - 60  # 60 seconds window
             
@@ -154,7 +154,7 @@ class RPMTracker:
         """Get current RPM for a model."""
         if self.use_redis and self.redis_manager:
             try:
-                redis_client = await self.redis_manager.get_client()
+                redis_client = self.redis_manager.get_client()
                 current_time = int(time.time())
                 window_start = current_time - 60
                 key = f"rpm_counter:{model_id}"

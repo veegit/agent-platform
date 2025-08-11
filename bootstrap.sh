@@ -1,13 +1,14 @@
 #!/bin/bash
 
 # Agent Platform Bootstrap Script
-# This script recreates agents and their delegate mappings from embedded configuration
-# Usage: ./bootstrap.sh <hostname>
+# This script recreates agents and their delegate mappings from saved configuration
+# Usage: ./bootstrap.sh <hostname> [--recreate]
 
 set -e  # Exit on any error
 
 # Default values
 DEFAULT_PORT="8001"
+AGENTS_FILE="agents.json"
 
 # Colors for output
 RED='\033[0;31m'
@@ -35,185 +36,90 @@ print_error() {
 
 # Function to show usage
 show_usage() {
-    echo "Usage: $0 <hostname>"
+    echo "Usage: $0 <hostname> [--recreate]"
     echo ""
     echo "Arguments:"
     echo "  hostname     - The hostname/IP where the agent lifecycle service is running"
+    echo "  --recreate   - Delete existing agents before creating new ones"
     echo ""
     echo "Examples:"
-    echo "  $0 localhost"
-    echo "  $0 192.168.1.100"
+    echo "  $0 localhost                  # Create agents from $AGENTS_FILE (skip if exist)"
+    echo "  $0 localhost --recreate       # Delete and recreate all agents"
+    echo "  $0 192.168.1.100 --recreate"
     echo ""
     echo "The script will:"
-    echo "  1. Create all agents from embedded configuration"
-    echo "  2. Set up delegate domain mappings"
-    echo "  3. Activate all agents"
+    echo "  1. Load agent configuration from $AGENTS_FILE"
+    echo "  2. Optionally delete existing agents (with --recreate)"
+    echo "  3. Create all agents from configuration"
+    echo "  4. Set up delegate domain mappings"
+    echo "  5. Activate all agents"
 }
 
 # Check arguments
-if [ $# -ne 1 ]; then
+if [ $# -lt 1 ] || [ $# -gt 2 ]; then
     show_usage
     exit 1
 fi
 
 HOSTNAME="$1"
+RECREATE_MODE=false
+
+# Parse optional --recreate flag
+if [ $# -eq 2 ] && [ "$2" = "--recreate" ]; then
+    RECREATE_MODE=true
+elif [ $# -eq 2 ]; then
+    print_error "Invalid argument: $2"
+    show_usage
+    exit 1
+fi
+
 BASE_URL="http://${HOSTNAME}:${DEFAULT_PORT}"
 
-# Embedded agent configuration
+# Function to load agent configuration from file
 get_agent_config() {
-    cat << 'EOF'
-{
-  "agents": [
-    {
-      "agent_id": "supervisor_agent",
-      "status": "active",
-      "config": {
-        "agent_id": "supervisor_agent",
-        "persona": {
-          "name": "Supervisor Agent",
-          "description": "Coordinates specialized agents to assist with complex queries",
-          "goals": [
-            "Provide accurate information",
-            "Delegate to domain experts when necessary"
-          ],
-          "constraints": [
-            "Only use verified sources",
-            "Respect user privacy"
-          ],
-          "tone": "helpful and friendly",
-          "system_prompt": "You manage a team of domain experts. Coordinate with them only when necessary and avoid mentioning them unless relevant."
-        },
-        "llm": {
-          "model_name": "gemini-2.5-flash",
-          "temperature": 0.7,
-          "max_tokens": 2000,
-          "top_p": null,
-          "frequency_penalty": null,
-          "presence_penalty": null,
-          "provider": "gemini"
-        },
-        "skills": [],
-        "memory": {
-          "max_messages": 50,
-          "summarize_after": 20,
-          "long_term_memory_enabled": true,
-          "key_fact_extraction_enabled": true
-        },
-        "is_supervisor": true,
-        "default_skill_params": {},
-        "additional_config": {}
-      },
-      "created_at": "2025-08-05T04:17:07.064023",
-      "updated_at": "2025-08-05T04:17:07.064023",
-      "created_by": null,
-      "domain": null,
-      "keywords": []
-    },
-    {
-      "agent_id": "research-agent",
-      "status": "active",
-      "config": {
-        "agent_id": "research-agent",
-        "persona": {
-          "name": "Research Agent",
-          "description": "Helps with research and summarizing information",
-          "goals": [
-            "Provide thorough answers",
-            "Find relevant sources"
-          ],
-          "constraints": [
-            "Avoid speculation"
-          ],
-          "tone": "informative",
-          "system_prompt": "You are an expert research assistant."
-        },
-        "llm": {
-          "model_name": "gemini-2.5-flash",
-          "temperature": 0.7,
-          "max_tokens": 2000,
-          "top_p": null,
-          "frequency_penalty": null,
-          "presence_penalty": null,
-          "provider": "gemini"
-        },
-        "skills": [
-          "ask-follow-up",
-          "summarize-text",
-          "web-search"
-        ],
-        "memory": {
-          "max_messages": 50,
-          "summarize_after": 20,
-          "long_term_memory_enabled": true,
-          "key_fact_extraction_enabled": true
-        },
-        "is_supervisor": false,
-        "default_skill_params": {},
-        "additional_config": {}
-      },
-      "created_at": "2025-08-05T04:17:00.578893",
-      "updated_at": "2025-08-05T04:17:00.578894",
-      "created_by": null,
-      "domain": "research",
-      "keywords": [
-        "research",
-        "analysis",
-        "sources"
-      ]
-    },
-    {
-      "agent_id": "finance-agent",
-      "status": "active",
-      "config": {
-        "agent_id": "finance-agent",
-        "persona": {
-          "name": "Finance Agent",
-          "description": "Provides stock prices and market updates",
-          "goals": [
-            "Fetch real-time market data"
-          ],
-          "constraints": [
-            "No investment advice"
-          ],
-          "tone": "professional",
-          "system_prompt": "You specialize in financial data and stock information."
-        },
-        "llm": {
-          "model_name": "gemini-2.5-flash",
-          "temperature": 0.7,
-          "max_tokens": 2000,
-          "top_p": null,
-          "frequency_penalty": null,
-          "presence_penalty": null,
-          "provider": "gemini"
-        },
-        "skills": [
-          "finance"
-        ],
-        "memory": {
-          "max_messages": 50,
-          "summarize_after": 20,
-          "long_term_memory_enabled": true,
-          "key_fact_extraction_enabled": true
-        },
-        "is_supervisor": false,
-        "default_skill_params": {},
-        "additional_config": {}
-      },
-      "created_at": "2025-08-05T04:16:27.630000",
-      "updated_at": "2025-08-05T04:16:27.630002",
-      "created_by": null,
-      "domain": "finance",
-      "keywords": [
-        "stocks",
-        "market",
-        "investment"
-      ]
-    }
-  ],
-  "total": 3
+    if [ -f "$AGENTS_FILE" ]; then
+        print_info "Loading agent configuration from $AGENTS_FILE" >&2
+        cat "$AGENTS_FILE"
+    else
+        print_error "$AGENTS_FILE not found. Please create the file with agent configuration."
+        print_info "Expected file format:"
+        print_info '{'
+        print_info '  "agents": ['
+        print_info '    {'
+        print_info '      "agent_id": "agent_name",'
+        print_info '      "status": "active",'
+        print_info '      "config": { ... },'
+        print_info '      "domain": "optional_domain",'
+        print_info '      "keywords": ["keyword1", "keyword2"]'
+        print_info '    }'
+        print_info '  ],'
+        print_info '  "total": 1'
+        print_info '}'
+        exit 1
+    fi
 }
-EOF
+
+# Function to delete an existing agent
+delete_agent() {
+    local agent_id="$1"
+    print_info "Deleting existing agent: $agent_id"
+    
+    DELETE_RESPONSE=$(curl -s -X DELETE "$BASE_URL/agents/$agent_id" \
+        -H "Content-Type: application/json")
+    
+    if echo "$DELETE_RESPONSE" | jq -e '.success' > /dev/null 2>&1; then
+        print_success "Deleted agent: $agent_id"
+    elif echo "$DELETE_RESPONSE" | grep -q "not found\|404"; then
+        print_info "Agent $agent_id does not exist, skipping deletion"
+    else
+        print_warning "Failed to delete agent $agent_id (may not exist)"
+        print_info "Response: $DELETE_RESPONSE"
+    fi
+}
+
+# Function to list all existing agents
+list_existing_agents() {
+    curl -s "$BASE_URL/agents" | jq -r '.agents[].agent_id' 2>/dev/null || echo ""
 }
 
 # Check if jq is installed
@@ -231,6 +137,10 @@ fi
 print_info "Starting Agent Platform Bootstrap"
 print_info "Hostname: $HOSTNAME"
 print_info "Base URL: $BASE_URL"
+print_info "Configuration file: $AGENTS_FILE"
+if $RECREATE_MODE; then
+    print_warning "RECREATE MODE: Will delete existing agents before creating new ones"
+fi
 echo ""
 
 # Test connection to agent lifecycle service
@@ -242,10 +152,36 @@ if ! curl -s -f "$BASE_URL/health" > /dev/null; then
 fi
 print_success "Connected to agent lifecycle service"
 
-# Get embedded configuration and parse agents
+# Handle recreate mode - delete existing agents first
+if $RECREATE_MODE; then
+    print_info "Recreate mode enabled - deleting all existing agents..."
+    EXISTING_AGENTS=$(list_existing_agents)
+    
+    if [ -n "$EXISTING_AGENTS" ]; then
+        echo "$EXISTING_AGENTS" | while read -r agent_id; do
+            if [ -n "$agent_id" ]; then
+                delete_agent "$agent_id"
+            fi
+        done
+        
+        # Small delay to allow deletions to complete
+        sleep 2
+        print_success "All existing agents deleted"
+    else
+        print_info "No existing agents found to delete"
+    fi
+    echo ""
+fi
+
+# Get configuration and parse agents
 CONFIG_JSON=$(get_agent_config)
+if [ -z "$CONFIG_JSON" ] || ! echo "$CONFIG_JSON" | jq empty > /dev/null 2>&1; then
+    print_error "Invalid or empty JSON configuration"
+    exit 1
+fi
+
 AGENT_COUNT=$(echo "$CONFIG_JSON" | jq '.agents | length')
-print_info "Found $AGENT_COUNT agents in embedded configuration"
+print_info "Found $AGENT_COUNT agents in configuration"
 echo ""
 
 # Create each agent
@@ -290,10 +226,12 @@ for i in $(seq 0 $((AGENT_COUNT - 1))); do
                 print_info "  └─ Keywords: $RESPONSE_KEYWORDS"
             fi
         fi
+        AGENT_CREATED=true
     else
         # Check if agent already exists
         if echo "$RESPONSE" | grep -q "already exists\|duplicate"; then
             print_warning "Agent $AGENT_ID already exists, skipping creation"
+            AGENT_CREATED=false
         else
             print_error "Failed to create agent $AGENT_ID"
             print_error "Response: $RESPONSE"
@@ -301,7 +239,7 @@ for i in $(seq 0 $((AGENT_COUNT - 1))); do
         fi
     fi
     
-    # Activate the agent if it should be active
+    # Activate the agent if it should be active (for both new and existing agents)
     if [ "$STATUS" = "active" ]; then
         print_info "Activating agent: $AGENT_ID"
         
@@ -312,6 +250,9 @@ for i in $(seq 0 $((AGENT_COUNT - 1))); do
         
         if echo "$ACTIVATE_RESPONSE" | jq -e '.success' > /dev/null 2>&1; then
             print_success "Activated agent: $AGENT_ID"
+        elif echo "$ACTIVATE_RESPONSE" | jq -e '.message' > /dev/null 2>&1; then
+            MESSAGE=$(echo "$ACTIVATE_RESPONSE" | jq -r '.message')
+            print_info "Agent $AGENT_ID: $MESSAGE"
         else
             print_warning "Failed to activate agent $AGENT_ID (may already be active)"
         fi
@@ -341,7 +282,23 @@ echo ""
 print_success "Bootstrap completed successfully!"
 print_info "You can now test your agents by sending messages to the platform"
 
-# Show Redis delegate verification command
+# Show additional verification commands
 echo ""
-print_info "To verify delegate setup in Redis, run:"
-echo "docker exec -it agent-platform-redis-1 redis-cli keys \"delegate:*\""
+print_info "Verification commands:"
+print_info "  Delegate setup in Redis:"
+echo "  docker exec -it agent-platform-redis-1 redis-cli keys \"delegate:*\""
+echo ""
+print_info "  Model Router statistics:"
+echo "  curl -s http://$HOSTNAME:8000/routing/stats | jq"
+echo ""
+print_info "  Routing health check:"
+echo "  curl -s http://$HOSTNAME:8000/routing/health | jq"
+echo ""
+print_info "  Agent list:"
+echo "  curl -s http://$HOSTNAME:8000/agents | jq"
+
+# Show configuration source
+echo ""
+print_info "Agent configuration loaded from: $AGENTS_FILE"
+print_info "To update agents: modify $AGENTS_FILE and run this script with --recreate"
+print_info "To save current configuration: curl -s $BASE_URL/agents > $AGENTS_FILE"
