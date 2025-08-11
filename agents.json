@@ -1,0 +1,152 @@
+{
+  "agents": [
+    {
+      "agent_id": "supervisor_agent",
+      "status": "active",
+      "config": {
+        "agent_id": "supervisor_agent",
+        "persona": {
+          "name": "Supervisor Agent",
+          "description": "Coordinates specialized agents to assist with complex queries",
+          "goals": [
+            "Provide accurate information",
+            "Delegate to domain experts when necessary"
+          ],
+          "constraints": [
+            "Only use verified sources",
+            "Respect user privacy"
+          ],
+          "tone": "helpful and friendly",
+          "system_prompt": "You manage a team of domain experts. Coordinate with them only when necessary and avoid mentioning them unless relevant."
+        },
+        "llm": {
+          "model_name": "gemini-2.5-flash",
+          "temperature": 0.7,
+          "max_tokens": 2000,
+          "top_p": null,
+          "frequency_penalty": null,
+          "presence_penalty": null,
+          "provider": "gemini"
+        },
+        "skills": [],
+        "memory": {
+          "max_messages": 50,
+          "summarize_after": 20,
+          "long_term_memory_enabled": true,
+          "key_fact_extraction_enabled": true
+        },
+        "is_supervisor": true,
+        "default_skill_params": {},
+        "additional_config": {}
+      },
+      "created_at": "2025-08-05T04:17:07.064023",
+      "updated_at": "2025-08-05T04:17:07.064023",
+      "created_by": null,
+      "domain": null,
+      "keywords": []
+    },
+    {
+      "agent_id": "research-agent",
+      "status": "active",
+      "config": {
+        "agent_id": "research-agent",
+        "persona": {
+          "name": "Research Agent",
+          "description": "Helps with research and summarizing information",
+          "goals": [
+            "Provide thorough answers",
+            "Find relevant sources"
+          ],
+          "constraints": [
+            "Avoid speculation"
+          ],
+          "tone": "informative",
+          "system_prompt": "You are an expert research assistant."
+        },
+        "llm": {
+          "model_name": "gemini-2.5-flash",
+          "temperature": 0.7,
+          "max_tokens": 2000,
+          "top_p": null,
+          "frequency_penalty": null,
+          "presence_penalty": null,
+          "provider": "gemini"
+        },
+        "skills": [
+          "ask-follow-up",
+          "summarize-text",
+          "web-search"
+        ],
+        "memory": {
+          "max_messages": 50,
+          "summarize_after": 20,
+          "long_term_memory_enabled": true,
+          "key_fact_extraction_enabled": true
+        },
+        "is_supervisor": false,
+        "default_skill_params": {},
+        "additional_config": {}
+      },
+      "created_at": "2025-08-05T04:17:00.578893",
+      "updated_at": "2025-08-05T04:17:00.578894",
+      "created_by": null,
+      "domain": "research",
+      "keywords": [
+        "research",
+        "analysis",
+        "sources"
+      ]
+    },
+    {
+      "agent_id": "finance-agent",
+      "status": "active",
+      "config": {
+        "agent_id": "finance-agent",
+        "persona": {
+          "name": "Finance Agent",
+          "description": "Provides stock prices and market updates",
+          "goals": [
+            "Fetch real-time market data"
+          ],
+          "constraints": [
+            "No investment advice"
+          ],
+          "tone": "professional",
+          "system_prompt": "You specialize in financial data and stock information."
+        },
+        "llm": {
+          "model_name": "gemini-2.5-flash",
+          "temperature": 0.7,
+          "max_tokens": 2000,
+          "top_p": null,
+          "frequency_penalty": null,
+          "presence_penalty": null,
+          "provider": "gemini"
+        },
+        "skills": [
+          "finance"
+        ],
+        "memory": {
+          "max_messages": 50,
+          "summarize_after": 20,
+          "long_term_memory_enabled": true,
+          "key_fact_extraction_enabled": true
+        },
+        "is_supervisor": false,
+        "default_skill_params": {},
+        "additional_config": {}
+      },
+      "created_at": "2025-08-05T04:16:27.630000",
+      "updated_at": "2025-08-05T04:16:27.630002",
+      "created_by": null,
+      "domain": "finance",
+      "keywords": [
+        "stocks",
+        "market",
+        "investment"
+      ]
+    }
+  ],
+  "total": 3
+}
+
