@@ -143,6 +143,10 @@ async def send_message(
     
     # Extract the agent's message
     agent_message_data = response.get("agent_message", {})
+    
+    # Debug: Log agent flow data
+    agent_flow_data = agent_message_data.get("agent_flow")
+    logger.info(f"Agent flow data in API router: {agent_flow_data}")
     timestamp = agent_message_data.get("timestamp")
     if isinstance(timestamp, str):
         try:
@@ -155,7 +159,8 @@ async def send_message(
         role=agent_message_data.get("role", MessageRole.AGENT),
         content=agent_message_data.get("content", ""),
         timestamp=timestamp,
-        metadata=agent_message_data.get("metadata")
+        metadata=agent_message_data.get("metadata"),
+        agent_flow=agent_message_data.get("agent_flow")
     )
     
     return MessageResponse(

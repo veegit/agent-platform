@@ -168,11 +168,18 @@ async def response_formulation_node(
             )
             
             # Extract the response
-            if "error" in llm_response:
+            if isinstance(llm_response, dict) and "error" in llm_response:
                 logger.error(f"Error generating response: {llm_response['error']}")
                 response_content = "I apologize, but I'm having trouble generating a response right now. Could you try again?"
-            else:
+            elif isinstance(llm_response, str):
+                # LLM returned a string directly (no schema case)
+                response_content = llm_response
+            elif isinstance(llm_response, dict):
+                # LLM returned a dictionary (schema case)
                 response_content = llm_response.get("content", "")
+            else:
+                # Fallback for unexpected response types
+                response_content = str(llm_response)
         
         # Create the response message
         response_message = Message(

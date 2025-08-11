@@ -225,7 +225,7 @@ async def call_llm(
                 return {"error": "JSON parse failed", "raw_content": content, "fallback": True}
         else:
             # Return the raw content for non-JSON responses
-            return {"content": content}
+            return content
             
     except Exception as e:
         logger.error(f"Error calling Gemini LLM: {e}")

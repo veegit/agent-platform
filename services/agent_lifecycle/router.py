@@ -80,6 +80,11 @@ async def create_agent(
             keywords=request.keywords,
         )
         
+        # Get delegate information if domain was provided
+        delegate_domain, delegate_keywords = None, []
+        if request.domain:
+            delegate_domain, delegate_keywords = await repository.get_agent_delegate_info(agent.agent_id)
+        
         # Return the agent
         return AgentResponse(
             agent_id=agent.agent_id,
@@ -87,7 +92,9 @@ async def create_agent(
             config=agent.config,
             created_at=agent.created_at,
             updated_at=agent.updated_at,
-            created_by=agent.created_by
+            created_by=agent.created_by,
+            domain=delegate_domain,
+            keywords=delegate_keywords
         )
     
     except ValidationError as e:
@@ -121,13 +128,18 @@ async def get_agent(
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
     
+    # Get delegate information
+    delegate_domain, delegate_keywords = await repository.get_agent_delegate_info(agent_id)
+    
     return AgentResponse(
         agent_id=agent.agent_id,
         status=agent.status,
         config=agent.config,
         created_at=agent.created_at,
         updated_at=agent.updated_at,
-        created_by=agent.created_by
+        created_by=agent.created_by,
+        domain=delegate_domain,
+        keywords=delegate_keywords
     )
 
 
@@ -195,7 +207,13 @@ async def update_agent_config(
     if request.config.agent_id != agent_id:
         request.config.agent_id = agent_id
     
-    success = await repository.update_agent_config(agent_id, request.config)
+    # Use delegate-aware update method
+    success = await repository.update_agent_config_with_delegate(
+        agent_id, 
+        request.config,
+        request.domain,
+        request.keywords
+    )
     
     if not success:
         raise HTTPException(status_code=500, detail=f"Failed to update configuration of agent {agent_id}")
@@ -203,13 +221,18 @@ async def update_agent_config(
     # Get the updated agent
     updated_agent = await repository.get_agent(agent_id)
     
+    # Get delegate information
+    delegate_domain, delegate_keywords = await repository.get_agent_delegate_info(agent_id)
+    
     return AgentResponse(
         agent_id=updated_agent.agent_id,
         status=updated_agent.status,
         config=updated_agent.config,
         created_at=updated_agent.created_at,
         updated_at=updated_agent.updated_at,
-        created_by=updated_agent.created_by
+        created_by=updated_agent.created_by,
+        domain=delegate_domain,
+        keywords=delegate_keywords
     )
 
 
@@ -236,13 +259,18 @@ async def list_agents(
     # Convert to API response model
     response_agents = []
     for agent in agents:
+        # Get delegate information for each agent
+        delegate_domain, delegate_keywords = await repository.get_agent_delegate_info(agent.agent_id)
+        
         response_agents.append(AgentResponse(
             agent_id=agent.agent_id,
             status=agent.status,
             config=agent.config,
             created_at=agent.created_at,
             updated_at=agent.updated_at,
-            created_by=agent.created_by
+            created_by=agent.created_by,
+            domain=delegate_domain,
+            keywords=delegate_keywords
         ))
     
     return AgentListResponse(

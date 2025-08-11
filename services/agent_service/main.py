@@ -5,6 +5,7 @@ Main application for the Agent Service.
 import logging
 import os
 import uuid
+from datetime import datetime
 from typing import Dict, Any, List, Optional
 
 from fastapi import FastAPI, HTTPException, Depends, Body
