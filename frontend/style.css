@@ -231,18 +231,24 @@ body {
   
   .flow-node.agent rect {
     fill: #4CAF50;
+    stroke: #2E7D32;
   }
   
   .flow-node.skill rect {
     fill: #2196F3;
+    stroke: #1565C0;
+    stroke-width: 3px;
+    stroke-dasharray: 3,3;
   }
   
   .flow-node.reasoning rect {
     fill: #FF9800;
+    stroke: #E65100;
   }
   
   .flow-node.delegation rect {
     fill: #9C27B0;
+    stroke: #4A148C;
   }
   
   .flow-node text {

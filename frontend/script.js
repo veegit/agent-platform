@@ -187,6 +187,12 @@ function showFlowDiagram(messageId) {
   const modal = document.getElementById('flowModal');
   modal.classList.remove('hidden');
   
+  // Update modal title with flow information
+  const modalTitle = modal.querySelector('.modal-header h3');
+  const skillCount = flowData.nodes ? flowData.nodes.filter(n => n.type === 'skill').length : 0;
+  const agentCount = flowData.nodes ? flowData.nodes.filter(n => n.type === 'agent').length : 0;
+  modalTitle.textContent = `Agent Flow: ${agentCount} Agent(s), ${skillCount} Skill(s)`;
+  
   // Clear previous diagram
   const diagramContainer = document.getElementById('flowDiagram');
   diagramContainer.innerHTML = '';
@@ -255,11 +261,26 @@ function createFlowDiagram(container, flowData) {
         const midX = (fromPos.x + toPos.x) / 2;
         const midY = (fromPos.y + toPos.y) / 2;
         
+        // Determine edge type for better labeling
+        let labelText = edge.label;
+        const fromNode = nodes.find(n => n.id === edge.from_node);
+        const toNode = nodes.find(n => n.id === edge.to_node);
+        
+        if (fromNode && toNode) {
+          if (fromNode.type === 'agent' && toNode.type === 'skill') {
+            labelText = 'uses skill';
+          } else if (fromNode.type === 'reasoning' && toNode.type === 'skill') {
+            labelText = 'executes';
+          } else if (fromNode.type === 'delegation' && toNode.type === 'agent') {
+            labelText = 'delegates to';
+          }
+        }
+        
         svg.append('text')
           .attr('class', 'flow-edge-label')
           .attr('x', midX)
           .attr('y', midY - 5)
-          .text(edge.label);
+          .text(labelText);
       }
     }
   });
@@ -272,27 +293,122 @@ function createFlowDiagram(container, flowData) {
     const nodeGroup = svg.append('g')
       .attr('class', `flow-node ${node.type}`);
     
-    // Node rectangle
-    const rectWidth = Math.max(80, node.name.length * 8);
-    const rectHeight = 40;
+    // Calculate node dimensions based on type and content
+    let rectWidth, rectHeight;
+    let displayText = node.name;
     
+    if (node.type === 'skill') {
+      // Make skill nodes more prominent and add skill details
+      const skillId = node.metadata?.skill_id || '';
+      const skillStatus = node.metadata?.status || '';
+      displayText = `${node.name}`;
+      if (skillStatus) {
+        displayText += ` (${skillStatus})`;
+      }
+      rectWidth = Math.max(120, displayText.length * 7);
+      rectHeight = 45;
+    } else if (node.type === 'agent') {
+      // Show agent type more clearly
+      const domain = node.metadata?.domain || '';
+      if (domain && domain !== 'general') {
+        displayText = `${node.name} (${domain})`;
+      }
+      rectWidth = Math.max(100, displayText.length * 8);
+      rectHeight = 40;
+    } else {
+      rectWidth = Math.max(80, node.name.length * 8);
+      rectHeight = 40;
+    }
+    
+    // Node rectangle
     nodeGroup.append('rect')
       .attr('x', pos.x - rectWidth/2)
       .attr('y', pos.y - rectHeight/2)
       .attr('width', rectWidth)
       .attr('height', rectHeight);
     
-    // Node text
-    nodeGroup.append('text')
-      .attr('x', pos.x)
-      .attr('y', pos.y)
-      .text(node.name);
-    
-    // Add tooltip on hover
-    if (node.description) {
-      nodeGroup.append('title')
-        .text(node.description);
+    // Node text - handle multiline for skills
+    if (node.type === 'skill' && displayText.length > 20) {
+      // Split long skill names into multiple lines
+      const words = displayText.split(' ');
+      const lines = [];
+      let currentLine = '';
+      
+      words.forEach(word => {
+        if ((currentLine + word).length > 18) {
+          if (currentLine) lines.push(currentLine.trim());
+          currentLine = word + ' ';
+        } else {
+          currentLine += word + ' ';
+        }
+      });
+      if (currentLine) lines.push(currentLine.trim());
+      
+      lines.forEach((line, i) => {
+        nodeGroup.append('text')
+          .attr('x', pos.x)
+          .attr('y', pos.y - (lines.length - 1) * 6 + i * 12)
+          .text(line);
+      });
+    } else {
+      nodeGroup.append('text')
+        .attr('x', pos.x)
+        .attr('y', pos.y)
+        .text(displayText);
     }
+    
+    // Enhanced tooltip with more details
+    let tooltipText = node.description || node.name;
+    if (node.type === 'skill') {
+      const skillId = node.metadata?.skill_id || '';
+      const skillStatus = node.metadata?.status || '';
+      tooltipText = `Skill: ${node.name}`;
+      if (skillId) tooltipText += `\nID: ${skillId}`;
+      if (skillStatus) tooltipText += `\nStatus: ${skillStatus}`;
+      if (node.description) tooltipText += `\nDescription: ${node.description}`;
+    } else if (node.type === 'agent') {
+      const agentId = node.metadata?.agent_id || '';
+      const domain = node.metadata?.domain || '';
+      tooltipText = `Agent: ${node.name}`;
+      if (agentId) tooltipText += `\nID: ${agentId}`;
+      if (domain) tooltipText += `\nDomain: ${domain}`;
+      if (node.description) tooltipText += `\nDescription: ${node.description}`;
+    }
+    
+    nodeGroup.append('title')
+      .text(tooltipText);
+  });
+  
+  // Add legend
+  const legend = svg.append('g')
+    .attr('class', 'flow-legend')
+    .attr('transform', `translate(${width - 150}, 20)`);
+  
+  const legendItems = [
+    { type: 'agent', color: '#4CAF50', label: 'Agent' },
+    { type: 'skill', color: '#2196F3', label: 'Skill' },
+    { type: 'reasoning', color: '#FF9800', label: 'Reasoning' },
+    { type: 'delegation', color: '#9C27B0', label: 'Delegation' }
+  ];
+  
+  legendItems.forEach((item, i) => {
+    const legendItem = legend.append('g')
+      .attr('transform', `translate(0, ${i * 20})`);
+    
+    legendItem.append('rect')
+      .attr('width', 12)
+      .attr('height', 12)
+      .attr('fill', item.color)
+      .attr('stroke', '#333')
+      .attr('stroke-width', 1);
+    
+    legendItem.append('text')
+      .attr('x', 16)
+      .attr('y', 6)
+      .attr('dy', '0.35em')
+      .attr('font-size', '10px')
+      .attr('fill', '#333')
+      .text(item.label);
   });
 }
 

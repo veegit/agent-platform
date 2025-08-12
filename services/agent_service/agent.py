@@ -237,6 +237,27 @@ class Agent:
                         "content": result.message.content,
                         "step": i+1
                     })
+                    
+                    # Merge skill information from delegated agent's flow into main flow  
+                    if result.message.agent_flow and 'nodes' in result.message.agent_flow:
+                        for node_data in result.message.agent_flow['nodes']:
+                            if node_data.get('type') == 'skill':
+                                # Add skill node from delegated agent
+                                skill_node_id = flow_tracker.add_node(
+                                    FlowNodeType.SKILL,
+                                    node_data.get('name', 'Unknown Skill'),
+                                    f"Delegated skill: {node_data.get('name', 'Unknown Skill')} (via {agent.config.persona.name})",
+                                    duration_ms=node_data.get('duration_ms'),
+                                    metadata={
+                                        **(node_data.get('metadata') or {}),
+                                        "delegated_from": agent.config.agent_id,
+                                        "delegated_agent_name": agent.config.persona.name,
+                                        "domain": domain
+                                    }
+                                )
+                                # Connect skill to target agent
+                                flow_tracker.add_edge(target_agent_node_id, skill_node_id, "uses skill")
+                    
                     logger.info(f"Agent {domain} completed step {i+1}")
                 except Exception as e:
                     logger.error(f"Error executing agent {domain}: {e}")
@@ -456,6 +477,26 @@ class Agent:
                     
                     # Process message with delegated agent and pass flow tracker
                     result = await matched_agent.process_message(user_message, user_id, conversation_id)
+                    
+                    # Merge skill information from delegated agent's flow into main flow  
+                    if result.message.agent_flow and 'nodes' in result.message.agent_flow:
+                        for node_data in result.message.agent_flow['nodes']:
+                            if node_data.get('type') == 'skill':
+                                # Add skill node from delegated agent
+                                skill_node_id = flow_tracker.add_node(
+                                    FlowNodeType.SKILL,
+                                    node_data.get('name', 'Unknown Skill'),
+                                    f"Delegated skill: {node_data.get('name', 'Unknown Skill')} (via {matched_agent.config.persona.name})",
+                                    duration_ms=node_data.get('duration_ms'),
+                                    metadata={
+                                        **(node_data.get('metadata') or {}),
+                                        "delegated_from": matched_agent.config.agent_id,
+                                        "delegated_agent_name": matched_agent.config.persona.name,
+                                        "domain": "general"
+                                    }
+                                )
+                                # Connect skill to target agent
+                                flow_tracker.add_edge(target_agent_node_id, skill_node_id, "uses skill")
                     
                     # Complete the flow and add it to the result
                     completed_flow = flow_tracker.complete()
