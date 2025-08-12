@@ -17,7 +17,8 @@ from shared.utils.model_router import (
     CostMode,
     RPMTracker,
     get_model_router,
-    route_model
+    route_model,
+    RoutingResult
 )
 
 
@@ -28,12 +29,14 @@ def test_config():
         'models': {
             'gemini_flash': {
                 'id': 'google/gemini-2.5-flash',
+                'provider': 'gemini',
                 'rpm_limit': 900,
                 'cost_per_1k_tokens_usd': 0.0002,
                 'latency_ms_avg': 400
             },
             'groq_llama_70b': {
-                'id': 'groq/llama-3-70b',
+                'id': 'meta-llama/llama-4-scout-17b-16e-instruct',
+                'provider': 'groq',
                 'rpm_limit': 60,
                 'cost_per_1k_tokens_usd': 0.0001,
                 'latency_ms_avg': 300
@@ -172,7 +175,7 @@ class TestModelRouter:
         )
         
         model_id, is_fallback = await router.get_model(metadata)
-        assert model_id == "groq/llama-3-70b"
+        assert model_id == "meta-llama/llama-4-scout-17b-16e-instruct"
         assert is_fallback is False
     
     @pytest.mark.asyncio
@@ -191,7 +194,7 @@ class TestModelRouter:
             )
             
             model_id, is_fallback = await router.get_model(metadata)
-            assert model_id == "groq/llama-3-70b"  # Fallback model
+            assert model_id == "meta-llama/llama-4-scout-17b-16e-instruct"  # Fallback model
             assert is_fallback is True
     
     @pytest.mark.asyncio
@@ -209,7 +212,7 @@ class TestModelRouter:
             
             model_id, is_fallback = await router.get_model(metadata)
             # Should still return fallback model (immediate mode)
-            assert model_id == "groq/llama-3-70b"
+            assert model_id == "meta-llama/llama-4-scout-17b-16e-instruct"
             assert is_fallback is True
     
     @pytest.mark.asyncio

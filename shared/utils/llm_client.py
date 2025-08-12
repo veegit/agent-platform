@@ -10,7 +10,7 @@ import google.generativeai as genai
 from typing import Any, Dict, List, Optional, Union
 from dataclasses import dataclass
 
-from shared.utils.model_router import TaskMetadata, route_model
+from shared.utils.model_router import TaskMetadata, route_model, RoutingResult
 
 logger = logging.getLogger(__name__)
 
@@ -66,26 +66,46 @@ class LLMClient:
         """
         try:
             # Route to appropriate model
-            model_id, is_fallback = await route_model(metadata)
-            logger.info(f"Routed to model: {model_id} (fallback: {is_fallback})")
+            routing_result = await route_model(metadata)
+            logger.info(f"Routed to model: {routing_result.model_id} via {routing_result.provider} (fallback: {routing_result.is_fallback})")
             
-            # Determine provider and call appropriate method
-            if "google/" in model_id or "gemini" in model_id.lower():
-                return await self._call_gemini_direct(
-                    messages, model_id, is_fallback, temperature, max_tokens, 
-                    system_prompt, output_schema
-                )
-            elif "groq/" in model_id:
-                return await self._call_groq_direct(
-                    messages, model_id, is_fallback, temperature, max_tokens,
-                    system_prompt, output_schema
-                )
-            else:
-                # Fallback to OpenRouter for any other models
-                return await self._call_openrouter(
-                    messages, model_id, is_fallback, temperature, max_tokens,
-                    system_prompt, output_schema
-                )
+            # Try the primary model first
+            response = await self._call_provider(
+                routing_result, messages, temperature, max_tokens, system_prompt, output_schema
+            )
+            
+            # If primary model failed and we haven't used fallback yet, try fallback
+            if response.error and not routing_result.is_fallback:
+                logger.warning(f"Primary model {routing_result.model_id} failed, trying fallback model")
+                
+                # Get fallback model by creating new metadata with higher priority to force fallback
+                from shared.utils.model_router import get_model_router
+                router = get_model_router()
+                
+                # Get routing policy for this agent role
+                role_key = metadata.agent_role.value if hasattr(metadata.agent_role, 'value') else str(metadata.agent_role)
+                policy = router.routing_policies.get(role_key)
+                
+                if policy and policy.fallback:
+                    fallback_model_config = router.models.get(policy.fallback)
+                    if fallback_model_config:
+                        fallback_result = RoutingResult(
+                            model_id=fallback_model_config.id,
+                            provider=fallback_model_config.provider,
+                            is_fallback=True
+                        )
+                        logger.info(f"Trying fallback model: {fallback_result.model_id} via {fallback_result.provider}")
+                        
+                        fallback_response = await self._call_provider(
+                            fallback_result, messages, temperature, max_tokens, system_prompt, output_schema
+                        )
+                        
+                        if not fallback_response.error:
+                            return fallback_response
+                        else:
+                            logger.error(f"Both primary and fallback models failed. Primary: {response.error}, Fallback: {fallback_response.error}")
+            
+            return response
                 
         except Exception as e:
             logger.error(f"LLM call failed: {e}")
@@ -95,6 +115,41 @@ class LLMClient:
                 is_fallback_used=False,
                 provider="unknown",
                 error=str(e)
+            )
+    
+    async def _call_provider(
+        self,
+        routing_result: RoutingResult,
+        messages: List[Dict[str, str]],
+        temperature: float,
+        max_tokens: int,
+        system_prompt: Optional[str],
+        output_schema: Optional[Dict[str, Any]]
+    ) -> LLMResponse:
+        """Call the appropriate provider based on routing result."""
+        if routing_result.provider == "gemini":
+            return await self._call_gemini_direct(
+                messages, routing_result.model_id, routing_result.is_fallback, temperature, max_tokens, 
+                system_prompt, output_schema
+            )
+        elif routing_result.provider == "groq":
+            return await self._call_groq_direct(
+                messages, routing_result.model_id, routing_result.is_fallback, temperature, max_tokens,
+                system_prompt, output_schema
+            )
+        elif routing_result.provider == "openrouter":
+            return await self._call_openrouter(
+                messages, routing_result.model_id, routing_result.is_fallback, temperature, max_tokens,
+                system_prompt, output_schema
+            )
+        else:
+            # Unknown provider - return error
+            return LLMResponse(
+                content="",
+                model_used=routing_result.model_id,
+                is_fallback_used=routing_result.is_fallback,
+                provider=routing_result.provider,
+                error=f"Unknown provider: {routing_result.provider}"
             )
     
     async def _call_gemini_direct(
@@ -219,11 +274,13 @@ class LLMClient:
             
         except Exception as e:
             logger.error(f"Gemini direct API call failed: {e}")
-            # Fallback to OpenRouter
-            logger.info("Falling back to OpenRouter for Gemini model")
-            return await self._call_openrouter(
-                messages, model_id, is_fallback, temperature, max_tokens,
-                system_prompt, output_schema
+            # Return error to let routing system handle fallback
+            return LLMResponse(
+                content="",
+                model_used=model_id,
+                is_fallback_used=is_fallback,
+                provider="gemini_direct",
+                error=str(e)
             )
     
     async def _call_groq_direct(
@@ -310,11 +367,13 @@ class LLMClient:
             
         except Exception as e:
             logger.error(f"Groq direct API call failed: {e}")
-            # Fallback to OpenRouter
-            logger.info("Falling back to OpenRouter for Groq model")
-            return await self._call_openrouter(
-                messages, model_id, is_fallback, temperature, max_tokens,
-                system_prompt, output_schema
+            # Return error to let routing system handle fallback
+            return LLMResponse(
+                content="",
+                model_used=model_id,
+                is_fallback_used=is_fallback,
+                provider="groq_direct",
+                error=str(e)
             )
     
     async def _call_openrouter(
@@ -411,8 +470,8 @@ class LLMClient:
     
     def _map_to_groq_model(self, model_id: str) -> str:
         """Map OpenRouter model ID to Groq model name."""
-        if "llama-3-70b" in model_id:
-            return "llama3-70b-8192"
+        if "llama-4-scout-17b-16e-instruct" in model_id:
+            return "llama-4-scout-17b-16e-instruct"
         elif "llama-3-8b" in model_id:
             return "llama3-8b-8192"
         else:

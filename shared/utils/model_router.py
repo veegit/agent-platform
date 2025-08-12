@@ -57,6 +57,7 @@ class TaskMetadata:
 class ModelConfig:
     """Configuration for a model."""
     id: str
+    provider: str
     rpm_limit: int
     cost_per_1k_tokens_usd: float
     latency_ms_avg: int
@@ -67,6 +68,14 @@ class RoutingPolicy:
     """Routing policy for an agent role."""
     primary: str
     fallback: str
+
+
+@dataclass 
+class RoutingResult:
+    """Result of model routing."""
+    model_id: str
+    provider: str
+    is_fallback: bool
 
 
 class RPMTracker:
@@ -89,6 +98,7 @@ class RPMTracker:
         Returns:
             True if under limit, False if over limit
         """
+        logger.info(f"RPM tracking: increment_and_check called for {model_id} (limit: {rpm_limit}, use_redis: {self.use_redis})")
         if self.use_redis and self.redis_manager:
             return await self._redis_increment_and_check(model_id, rpm_limit)
         else:
@@ -103,12 +113,15 @@ class RPMTracker:
             
             # Use Redis sorted set for sliding window
             key = f"rpm_counter:{model_id}"
+            logger.info(f"Redis RPM: Processing {model_id}, key={key}, current_time={current_time}")
             
             # Remove old entries outside the window
-            await redis_client.zremrangebyscore(key, 0, window_start)
+            removed_count = await redis_client.zremrangebyscore(key, 0, window_start)
+            logger.info(f"Redis RPM: Removed {removed_count} old entries for {model_id}")
             
             # Count current entries
             current_count = await redis_client.zcard(key)
+            logger.info(f"Redis RPM: Current count for {model_id}: {current_count}")
             
             if current_count >= rpm_limit:
                 logger.warning(f"Model {model_id} RPM limit {rpm_limit} exceeded: {current_count} requests")
@@ -116,12 +129,14 @@ class RPMTracker:
             
             # Add current request with timestamp as score and unique identifier as member
             unique_id = f"{current_time}:{asyncio.current_task().get_name() if asyncio.current_task() else 'unknown'}"
-            await redis_client.zadd(key, {unique_id: current_time})
+            added_count = await redis_client.zadd(key, {unique_id: current_time})
+            logger.info(f"Redis RPM: Added {added_count} entry for {model_id}, unique_id={unique_id}")
             
             # Set expiration for cleanup
-            await redis_client.expire(key, 120)  # 2 minutes to be safe
+            expire_result = await redis_client.expire(key, 120)  # 2 minutes to be safe
+            logger.info(f"Redis RPM: Set expiration for {model_id}: {expire_result}")
             
-            logger.debug(f"Model {model_id}: {current_count + 1}/{rpm_limit} RPM")
+            logger.info(f"Model {model_id}: {current_count + 1}/{rpm_limit} RPM - SUCCESS")
             return True
             
         except Exception as e:
@@ -225,13 +240,15 @@ class ModelRouter:
         self.models = {
             "gemini_flash": ModelConfig(
                 id="google/gemini-2.5-flash",
+                provider="gemini",
                 rpm_limit=900,
                 cost_per_1k_tokens_usd=0.0002,
                 latency_ms_avg=400
             ),
             "groq_llama_70b": ModelConfig(
-                id="groq/llama-3-70b",
-                rpm_limit=60,
+                id="llama3-70b-8192",
+                provider="groq",
+                rpm_limit=30,
                 cost_per_1k_tokens_usd=0.0001,
                 latency_ms_avg=300
             )
@@ -258,7 +275,7 @@ class ModelRouter:
             "log_fallback_events": True
         }
     
-    async def get_model(self, metadata: TaskMetadata) -> Tuple[str, bool]:
+    async def get_model(self, metadata: TaskMetadata) -> RoutingResult:
         """
         Get the appropriate model for a task.
         
@@ -266,7 +283,7 @@ class ModelRouter:
             metadata: Task metadata for routing decisions
             
         Returns:
-            Tuple of (model_id, is_fallback_used)
+            RoutingResult with model_id, provider, and fallback status
         """
         # Get routing policy for agent role
         role_key = metadata.agent_role.value if isinstance(metadata.agent_role, AgentRole) else str(metadata.agent_role)
@@ -274,7 +291,7 @@ class ModelRouter:
         
         if not policy:
             logger.warning(f"No routing policy found for role {role_key}, using default")
-            policy = self.routing_policies.get("supervisor", RoutingPolicy(primary="gemini_flash", fallback="groq_llama_70b"))
+            policy = self.routing_policies.get("supervisor", RoutingPolicy(primary="gemini_flash", fallback="groq_llama_scout"))
         
         # Try primary model first
         primary_model = self.models.get(policy.primary)
@@ -286,7 +303,11 @@ class ModelRouter:
             if can_use_primary:
                 if self.logging_config.get("enabled", True):
                     logger.info(f"Routing {role_key}:{metadata.task_type.value} to primary model {primary_model.id}")
-                return primary_model.id, False
+                return RoutingResult(
+                    model_id=primary_model.id,
+                    provider=primary_model.provider,
+                    is_fallback=False
+                )
             else:
                 if self.logging_config.get("log_fallback_events", True):
                     current_rpm = await self.rpm_tracker.get_current_rpm(primary_model.id)
@@ -302,7 +323,11 @@ class ModelRouter:
             if can_use_fallback:
                 if self.logging_config.get("log_fallback_events", True):
                     logger.warning(f"Using fallback model {fallback_model.id} for {role_key}:{metadata.task_type.value}")
-                return fallback_model.id, True
+                return RoutingResult(
+                    model_id=fallback_model.id,
+                    provider=fallback_model.provider,
+                    is_fallback=True
+                )
             else:
                 current_rpm = await self.rpm_tracker.get_current_rpm(fallback_model.id)
                 logger.error(f"Both primary and fallback models at RPM limit. Fallback: {current_rpm}/{fallback_model.rpm_limit}")
@@ -311,11 +336,19 @@ class ModelRouter:
         if self.fallback_behavior.get("mode") == "queue":
             # For now, return the fallback model anyway and let the caller handle retry
             logger.error(f"All models at RPM limit, returning fallback model {fallback_model.id} anyway")
-            return fallback_model.id, True
+            return RoutingResult(
+                model_id=fallback_model.id,
+                provider=fallback_model.provider,
+                is_fallback=True
+            )
         else:
             # Immediate mode - return fallback model anyway
             logger.error(f"All models at RPM limit, returning fallback model {fallback_model.id} anyway")
-            return fallback_model.id, True
+            return RoutingResult(
+                model_id=fallback_model.id,
+                provider=fallback_model.provider,
+                is_fallback=True
+            )
     
     def reload_config(self):
         """Reload configuration from file."""
@@ -351,7 +384,7 @@ def get_model_router() -> ModelRouter:
         _router_instance = ModelRouter(config_path)
     return _router_instance
 
-async def route_model(metadata: TaskMetadata) -> Tuple[str, bool]:
+async def route_model(metadata: TaskMetadata) -> RoutingResult:
     """
     Convenience function to route a model based on task metadata.
     
@@ -359,7 +392,7 @@ async def route_model(metadata: TaskMetadata) -> Tuple[str, bool]:
         metadata: Task metadata
         
     Returns:
-        Tuple of (model_id, is_fallback_used)
+        RoutingResult with model_id, provider, and fallback status
     """
     router = get_model_router()
     return await router.get_model(metadata)

@@ -161,8 +161,20 @@ class RedisAgentStore:
         agent_key = f"{self.AGENT_KEY_PREFIX}{agent_id}"
         
         try:
-            # Update the status in the main hash
-            await self.redis.set_value(agent_key, {"status": status})
+            # Get existing agent data first
+            existing_data = await self.redis.get_value(agent_key)
+            if existing_data:
+                # Update only the status field while preserving other data
+                existing_data["status"] = status
+                await self.redis.set_value(agent_key, existing_data)
+            else:
+                # If no existing data, create minimal agent data with status
+                await self.redis.set_value(agent_key, {
+                    "agent_id": agent_id,
+                    "name": "",
+                    "description": "",
+                    "status": status
+                })
             
             # Store the status history for auditing/debugging
             status_key = f"{self.AGENT_STATUS_KEY_PREFIX}{agent_id}"

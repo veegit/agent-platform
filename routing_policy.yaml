@@ -4,12 +4,14 @@
 models:
   gemini_flash:
     id: "google/gemini-2.5-flash"
+    provider: "gemini"    # Direct provider routing
     rpm_limit: 900    # High concurrency model for general use
     cost_per_1k_tokens_usd: 0.0002
     latency_ms_avg: 400
   groq_llama_70b:
-    id: "groq/llama-3-70b"
-    rpm_limit: 60     # Lower concurrency but high capability model
+    id: "llama3-70b-8192"
+    provider: "groq"      # Direct provider routing
+    rpm_limit: 30     # Free tier limit for Groq
     cost_per_1k_tokens_usd: 0.0001
     latency_ms_avg: 300
 

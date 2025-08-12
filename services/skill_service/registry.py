@@ -30,7 +30,7 @@ class SkillRegistry:
     async def initialize(self) -> None:
         """Initialize the skill registry."""
         # Always connect to Redis first, regardless of whether skills is None
-        self.redis_manager.connect()
+        await self.redis_manager.connect()
     
         # Now we can safely assign the skills attribute
         self.skill_store = self.redis_manager.skills

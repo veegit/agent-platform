@@ -73,12 +73,12 @@ class TestLLMClient:
     async def test_groq_direct_success(self, client, sample_metadata, sample_messages):
         """Test successful Groq direct API call."""
         with patch('shared.utils.model_router.route_model') as mock_route:
-            mock_route.return_value = ("groq/llama-3-70b", False)
+            mock_route.return_value = ("meta-llama/llama-4-scout-17b-16e-instruct", False)
             
             with patch.object(client, '_call_groq_direct') as mock_groq:
                 expected_response = LLMResponse(
                     content="Based on current data, today is sunny.",
-                    model_used="groq/llama-3-70b",
+                    model_used="meta-llama/llama-4-scout-17b-16e-instruct",
                     is_fallback_used=False,
                     provider="groq_direct"
                 )
@@ -90,7 +90,7 @@ class TestLLMClient:
                 )
                 
                 assert response.content == "Based on current data, today is sunny."
-                assert response.model_used == "groq/llama-3-70b"
+                assert response.model_used == "meta-llama/llama-4-scout-17b-16e-instruct"
                 assert response.provider == "groq_direct"
                 
                 mock_groq.assert_called_once()
@@ -179,7 +179,7 @@ class TestLLMClient:
         assert client._map_to_gemini_model("unknown-model") == "gemini-2.0-flash-exp"
         
         # Test Groq mapping
-        assert client._map_to_groq_model("groq/llama-3-70b") == "llama3-70b-8192"
+        assert client._map_to_groq_model("meta-llama/llama-4-scout-17b-16e-instruct") == "llama3-70b-8192"
         assert client._map_to_groq_model("groq/llama-3-8b") == "llama3-8b-8192"
         assert client._map_to_groq_model("unknown-model") == "llama3-70b-8192"
 
@@ -248,7 +248,7 @@ class TestGroqDirectCall:
         with patch.object(client.http_client, 'post', return_value=mock_response):
             response = await client._call_groq_direct(
                 messages=[{"role": "user", "content": "test"}],
-                model_id="groq/llama-3-70b",
+                model_id="meta-llama/llama-4-scout-17b-16e-instruct",
                 is_fallback=False,
                 temperature=0.7,
                 max_tokens=1000,
@@ -257,7 +257,7 @@ class TestGroqDirectCall:
             )
             
             assert response.content == "Test response from Groq"
-            assert response.model_used == "groq/llama-3-70b"
+            assert response.model_used == "meta-llama/llama-4-scout-17b-16e-instruct"
             assert response.provider == "groq_direct"
     
     @pytest.mark.asyncio
@@ -271,7 +271,7 @@ class TestGroqDirectCall:
             with patch.object(client, '_call_openrouter') as mock_openrouter:
                 expected_response = LLMResponse(
                     content="OpenRouter fallback",
-                    model_used="groq/llama-3-70b",
+                    model_used="meta-llama/llama-4-scout-17b-16e-instruct",
                     is_fallback_used=False,
                     provider="openrouter"
                 )
@@ -279,7 +279,7 @@ class TestGroqDirectCall:
                 
                 response = await client._call_groq_direct(
                     messages=[{"role": "user", "content": "test"}],
-                    model_id="groq/llama-3-70b",
+                    model_id="meta-llama/llama-4-scout-17b-16e-instruct",
                     is_fallback=False,
                     temperature=0.7,
                     max_tokens=1000,
